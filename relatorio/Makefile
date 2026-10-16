@@ -1,4 +1,4 @@
-# Pacote LaTeX — Relatório Final do Projeto Cripto Agent (Protocolo Chave-Organização v3)
+# Relatorio Final - Cripto Agent (protocolo SELO)
 #
 # Requisitos:
 #   - TeX Live (pdflatex) ou MiKTeX

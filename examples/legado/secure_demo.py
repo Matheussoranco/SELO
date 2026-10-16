@@ -1,7 +1,7 @@
 """Exemplo de uso do protocolo seguro v2."""
 import json
 from pathlib import Path
-from cripto_agent.secure_protocol import AgentKeys, SecureAgent, Capability, encrypt_message, decrypt_message
+from cripto_agent.legado.secure_protocol import AgentKeys, SecureAgent, Capability, encrypt_message, decrypt_message
 
 def echo(args):
     return {"text": args["text"]}

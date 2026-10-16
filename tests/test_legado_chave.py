@@ -3,7 +3,7 @@
 import json
 import time
 import unittest
-from cripto_agent.chave_protocol import (
+from cripto_agent.legado.chave_protocol import (
     AgentKeys, OrgEscrowKeys, Capability, SecureAgent, EnvelopeError,
     encrypt_message, decrypt_message, org_decrypt_message,
 )

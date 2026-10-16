@@ -2,7 +2,7 @@
 import argparse
 import json
 from pathlib import Path
-from cripto_agent.secure_protocol import AgentKeys, OrgEscrowKeys
+from cripto_agent.legado.secure_protocol import AgentKeys, OrgEscrowKeys
 
 def main():
     p = argparse.ArgumentParser()

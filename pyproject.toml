@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cripto-agent"
-version = "0.1.0"
-description = "Prototipo de interoperabilidade entre agentes com mTLS"
+version = "0.2.0"
+description = "SELO: protocolo de comunicacao segura entre agentes LLM, tools e skills (envelope cifrado, escrow estrutural, capacidades atenuaveis e controle de fluxo de integridade)"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["cryptography>=46,<47"]
 
-[project.optional-dependencies]
-dev = ["cryptography>=46,<47"]
+[project.scripts]
+cripto-agent = "cripto_agent.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["cripto_agent*"]

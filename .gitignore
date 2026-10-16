@@ -4,3 +4,9 @@ __pycache__/
 .local/
 *.sqlite3*
 *.key
+.ruff_cache/
+*.aux
+*.log
+*.out
+*.toc
+relatorio/*.pdf

@@ -16,11 +16,11 @@ import sys
 from pathlib import Path
 
 # Permite rodar direto: python examples/chave_demo.py
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from cripto_agent.chave_protocol import (  # noqa: E402
+from cripto_agent.legado.chave_protocol import (  # noqa: E402
     AgentKeys, OrgEscrowKeys, Capability, SecureAgent, EnvelopeError,
     encrypt_message, decrypt_message, org_decrypt_message,
 )

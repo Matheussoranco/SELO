@@ -6,9 +6,9 @@ import tempfile
 import threading
 import time
 import unittest
-from cripto_agent.protocol import Agent, Capability, ProtocolError, envelope, make_server, request as wire_request, tls_context
-from cripto_agent.__main__ import echo, summarize
-from scripts.dev_pki import generate
+from cripto_agent.legado.protocol import Agent, Capability, ProtocolError, envelope, make_server, request as wire_request, tls_context
+from cripto_agent.legado.__main__ import echo, summarize
+from scripts.legado.dev_pki import generate
 
 
 def request(url, context, message=None):
