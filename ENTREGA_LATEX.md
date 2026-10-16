@@ -1,0 +1,3 @@
+MEDIA:C:/Users/mathe/Documents/Code/cripto_agent/relatorio/relatorio.tex
+MEDIA:C:/Users/mathe/Documents/Code/cripto_agent/relatorio/Makefile
+MEDIA:C:/Users/mathe/Documents/Code/cripto_agent/relatorio/README.md

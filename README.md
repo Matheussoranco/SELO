@@ -22,6 +22,38 @@ implementada localmente, que pode compor operações. Nesta demonstração a ski
 calcula estatísticas de texto. Skills não são arquivos de instruções baixados e
 executados remotamente. Nenhuma mensagem instala código ou concede permissões.
 
+## Protocolo v3 — Chave-Organização (criptografia de mensagem com escrow da empresa)
+
+Versão original com estrutura de chaves própria, independente de transporte
+(mensagem autocontida em JSON; pode rodar sobre HTTP/HTTPS, filas ou qualquer
+canal de rede):
+
+- Cada agente: par Ed25519 (identidade/assinatura) + par X25519 (acordo de chaves).
+  A identidade não depende de máquina nem de perfil do SO.
+- A organização possui um par X25519 de escrow; a chave privada fica somente com
+  a empresa, que pode descriptografar qualquer mensagem (segurança interna /
+  auditoria).
+- Cada mensagem gera um par X25519 efemero; o payload cifra-se com AES-256-GCM sob
+  chave aleatória por mensagem.
+- A chave simétrica é encapsulada duas vezes via HKDF(X25519): uma para o
+  destinatário e outra para a empresa.
+- Assinatura Ed25519 sobre o cabeçalho vincula o remetente e ambos os
+  encapsulamentos.
+- Replay, janela temporal curta e autorização negar-por-padrão.
+
+Gerar chaves:
+```powershell
+.\.venv\Scripts\python scripts\generate_chave_keys.py --out .local\chave
+```
+
+Executar a demonstração de ponta a ponta (inclui descriptografia pela empresa
+via escrow):
+```powershell
+.\.venv\Scripts\python examples\chave_demo.py
+```
+
+Especificação completa: `docs/protocolo_chave.md`.
+
 ## Executar no Windows
 
 Python 3.11 ou posterior, com OpenSSL que suporte TLS 1.3.
@@ -100,6 +132,27 @@ filas ou brokers não confiáveis será necessário um perfil adicional de cript
 de mensagem ponta a ponta. Os certificados e diretório são fronteiras de confiança.
 
 Documentos adicionais: `docs/protocolo.md` e `docs/relatorio-projeto.md`.
+
+## Protocolo v2 — Criptografia de mensagem com escrow
+
+Uma versão experimental com criptografia de mensagem original, estilo chaves:
+
+- Organização possui par RSA-4096 de escrow; chave privada fica com a empresa.
+- Cada agente possui par RSA-2048 para identidade/assinatura.
+- Payload criptografado com AES-256-GCM efêmero; chave empacotada para destinatário e empresa.
+- Assinatura RSA-PSS sobre cabeçalho.
+
+Gerar chaves:
+```powershell
+.\.venv\Scripts\python scripts\generate_secure_keys.py --out .local\secure
+```
+
+Executar demo:
+```powershell
+.\.venv\Scripts\python examples\secure_demo.py
+```
+
+Documentação: `docs/protocolo_v2.md`.
 
 Referências primárias consultadas em 16/10/2026:
 - A2A: https://a2a-protocol.org/latest/

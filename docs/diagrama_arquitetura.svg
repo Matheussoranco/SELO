@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" font-family="Segoe UI, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0,0 10,3.5 0,7" fill="#2c3e50"/>
+    </marker>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8f4fd;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#b8d4f0;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fdf2e8;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#f0c9a8;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f1f8e9;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#d7e3b4;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Título -->
+  <text x="450" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#1a3a5c">Figura 1 — Arquitetura do Agente (Protocolo Chave-Organização v3)</text>
+
+  <!-- Agente A (remetente) -->
+  <g transform="translate(40,70)">
+    <rect x="0" y="0" width="380" height="400" rx="10" fill="url(#g1)" stroke="#2c3e50" stroke-width="2"/>
+    <text x="190" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#1a3a5c">Agente A — Remetente</text>
+    <!-- chaves A -->
+    <rect x="20" y="45" width="340" height="70" rx="6" fill="#ffffff" stroke="#7f8c8d" stroke-width="1.5"/>
+    <text x="35" y="70" font-size="12" font-weight="bold" fill="#2c3e50">Chaves do Agente A</text>
+    <text x="35" y="90" font-size="11" fill="#34495e">Ed25519 (identidade/assinatura)  ·  X25519 (acordo de chaves)</text>
+    <text x="35" y="105" font-size="11" fill="#34495e">Par efemero X25519 (gerado por mensagem)</text>
+    <!-- funções -->
+    <rect x="20" y="135" width="165" height="60" rx="6" fill="#ffffff" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="35" y="158" font-size="12" font-weight="bold" fill="#27ae60">encrypt_to()</text>
+    <text x="35" y="175" font-size="10.5" fill="#34495e">cifra payload AES-256-GCM</text>
+    <rect x="195" y="135" width="165" height="60" rx="6" fill="#ffffff" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="210" y="158" font-size="12" font-weight="bold" fill="#27ae60">assina Ed25519</text>
+    <text x="210" y="175" font-size="10.5" fill="#34495e">cabeçalho + ambos os wraps</text>
+    <!-- replay -->
+    <rect x="20" y="215" width="340" height="55" rx="6" fill="#ffffff" stroke="#e67e22" stroke-width="1.5"/>
+    <text x="35" y="240" font-size="12" font-weight="bold" fill="#e67e22">Registro de replay (SQLite)</text>
+    <text x="35" y="255" font-size="10.5" fill="#34495e">UUID da mensagem + expiração; rejeita reenvio</text>
+    <!-- seta de envio -->
+    <line x1="210" y1="285" x2="490" y2="285" stroke="#2c3e50" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="350" y="270" text-anchor="middle" font-size="11" fill="#2c3e50">Envelope JSON v3 (rede organizacional)</text>
+  </g>
+
+  <!-- Agente B (destinatário) -->
+  <g transform="translate(480,70)">
+    <rect x="0" y="0" width="380" height="400" rx="10" fill="url(#g1)" stroke="#2c3e50" stroke-width="2"/>
+    <text x="190" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#1a3a5c">Agente B — Destinatário</text>
+    <!-- chaves B -->
+    <rect x="20" y="45" width="340" height="70" rx="6" fill="#ffffff" stroke="#7f8c8d" stroke-width="1.5"/>
+    <text x="35" y="70" font-size="12" font-weight="bold" fill="#2c3e50">Chaves do Agente B</text>
+    <text x="35" y="90" font-size="11" fill="#34495e">Ed25519 (identidade)  ·  X25519 (acordo de chaves)</text>
+    <!-- descriptografa -->
+    <rect x="20" y="135" width="165" height="70" rx="6" fill="#ffffff" stroke="#2980b9" stroke-width="1.5"/>
+    <text x="35" y="158" font-size="12" font-weight="bold" fill="#2980b9">decrypt_message()</text>
+    <text x="35" y="175" font-size="10.5" fill="#34495e">unwrap K (chave própria)</text>
+    <rect x="195" y="135" width="165" height="70" rx="6" fill="#ffffff" stroke="#2980b9" stroke-width="1.5"/>
+    <text x="210" y="158" font-size="12" font-weight="bold" fill="#2980b9">verifica assinatura</text>
+    <text x="210" y="175" font-size="10.5" fill="#34495e">Ed25519 do remetente A</text>
+    <!-- autorização -->
+    <rect x="20" y="225" width="340" height="55" rx="6" fill="#ffffff" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="35" y="250" font-size="12" font-weight="bold" fill="#8e44ad">Autorização (negar por padrão)</text>
+    <text x="35" y="265" font-size="10.5" fill="#34495e">(remetente, kind, name) registrado?</text>
+    <!-- execução -->
+    <rect x="20" y="300" width="165" height="60" rx="6" fill="#ffffff" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="35" y="323" font-size="12" font-weight="bold" fill="#27ae60">dispatch() → handler</text>
+    <text x="35" y="340" font-size="10.5" fill="#34495e">tool/skill executada localmente</text>
+    <!-- resposta -->
+    <rect x="195" y="300" width="165" height="60" rx="6" fill="#ffffff" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="210" y="323" font-size="12" font-weight="bold" fill="#27ae60">Resposta cifrada</text>
+    <text x="210" y="340" font-size="10.5" fill="#34495e">de volta para o Agente A</text>
+    <line x1="290" y1="375" x2="290" y2="400" stroke="#2c3e50" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="290" y="388" text-anchor="middle" font-size="10" fill="#2c3e50">saída</text>
+  </g>
+
+  <!-- Escrow empresa -->
+  <g transform="translate(260,300)">
+    <rect x="0" y="0" width="380" height="180" rx="10" fill="url(#g2)" stroke="#c0392b" stroke-width="2"/>
+    <text x="190" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#922b21">Organização — Chave de Escrow</text>
+    <rect x="20" y="45" width="340" height="60" rx="6" fill="#ffffff" stroke="#c0392b" stroke-width="1.5"/>
+    <text x="35" y="70" font-size="12" font-weight="bold" fill="#922b21">org_private.pem (X25519)</text>
+    <text x="35" y="88" font-size="10.5" fill="#34495e">guarda-se somente com a empresa (HSM/ACL)</text>
+    <rect x="20" y="120" width="340" height="40" rx="6" fill="#ffffff" stroke="#c0392b" stroke-width="1.5"/>
+    <text x="35" y="143" font-size="12" font-weight="bold" fill="#922b21">org_decrypt_message()</text>
+    <text x="35" y="158" font-size="10.5" fill="#34495e">recupera K via wrap_org → auditoria interna / segurança</text>
+    <line x1="190" y1="40" x2="290" y2="70" stroke="#c0392b" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="235" y="32" text-anchor="middle" font-size="10" fill="#c0392b">acesso restrito</text>
+  </g>
+
+  <!-- Ligação B -> empresa -->
+  <line x1="620" y1="355" x2="450" y2="355" stroke="#c0392b" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+  <text x="535" y="342" text-anchor="middle" font-size="10" fill="#c0392b">empresa descriptografa (escrow)</text>
+</svg>
