@@ -121,6 +121,15 @@ class Agent:
         """Manifestos assinados + provas de inclusao: publico, nao carrega segredos."""
         return [c.bundle for c in self.caps.values()]
 
+    def sensitive_args(self, cap: str) -> Optional[List[str]]:
+        """Argumentos marcados `x-selo-sensitive` no manifesto conhecido da capacidade (ou None)."""
+        for m in self.manifests.by_hash.values():
+            if m["name"] == cap:
+                props = m["schema"].get("properties", {})
+                marked = [k for k, rule in props.items() if rule.get("x-selo-sensitive")]
+                return marked or None
+        return None
+
     def learn(self, bundle: Any, approve: Optional[Callable[[str, str], bool]] = None) -> Dict[str, Any]:
         """Aprende um manifesto remoto; se o nome ja estava fixado e o hash mudou, exige aprovacao."""
         m = self.manifests.add(*bundle)
@@ -185,10 +194,12 @@ class Agent:
             raise SeloError("invalid_arguments", str(error)) from None
 
         ctx = body["ctx"]
-        if (not isinstance(ctx, dict) or set(ctx) != {"sid", "stamps", "endorsements"}
+        if (not isinstance(ctx, dict) or set(ctx) != {"sid", "stamps", "endorsements", "scope"}
                 or not isinstance(ctx["sid"], str) or not isinstance(ctx["stamps"], list)
-                or not isinstance(ctx["endorsements"], list)):
+                or not isinstance(ctx["endorsements"], list) or ctx["scope"] not in ("full", "args")):
             raise SeloError("bad_request", "ctx")
+        if m["context"] == "full" and ctx["scope"] != "full":
+            raise SeloError("full_context_required", m["name"])
         taint = effective_taint(self.org, ctx["stamps"], ctx["endorsements"], now,
                                 self.manifests.get, self.revoked, sid=ctx["sid"], cap=m["name"])
         blocked = taint & (set(m["forbid_taint"]) | self.extra_forbid.get(m["name"], set()))
@@ -215,10 +226,16 @@ class Agent:
 
     # ------------------------------------------------------------------ cliente
     def call(self, recipient_id: str, cap: str, args: Dict[str, Any], token: Token,
-             session: Session, send: Send, ttl: int = DEFAULT_TTL) -> Dict[str, Any]:
+             session: Session, send: Send, ttl: int = DEFAULT_TTL, scope: str = "full",
+             cite_only: Optional[Any] = None) -> Dict[str, Any]:
+        """`scope="full"` cita todo o contexto; `scope="args"` cita so os itens que originaram os
+        argumentos (menos bloqueios falsos; depende do casamento textual do harness)."""
         target = self.remote_entry(recipient_id)
+        if scope == "args" and cite_only is None:
+            cite_only = self.sensitive_args(cap)
+        stamps = session.stamps if scope == "full" else session.cite_for(args, cite_only)
         request = {"t": "call", "cap": cap, "args": args, "token": token.to_dict(),
-                   "ctx": {"sid": session.sid, "stamps": session.stamps,
+                   "ctx": {"sid": session.sid, "stamps": stamps, "scope": scope,
                            "endorsements": session.endorsements},
                    "entry": self.my_entry()}
         envelope = seal(org=self.org, sender_id=self.id, sender_sk=self.sig_sk,
@@ -242,5 +259,5 @@ class Agent:
         if (stamp["origin"] != recipient_id or stamp["h"] != content_hash(body["result"])
                 or stamp["cap"] != cap):
             raise SeloError("stamp_mismatch")
-        session.observe(body["stamp"])
+        session.observe(body["stamp"], body["result"])
         return body["result"]

@@ -1,0 +1,256 @@
+{
+  "attacks": [
+    {
+      "category": "confidencialidade",
+      "attack": "terceiro agente tenta abrir envelope alheio",
+      "outcome": "blocked",
+      "code": "bad_signature"
+    },
+    {
+      "category": "confidencialidade",
+      "attack": "observador da rede procura segredo no tráfego",
+      "outcome": "blocked",
+      "code": "opaque"
+    },
+    {
+      "category": "autenticidade",
+      "attack": "adultera cabeçalho (iat)",
+      "outcome": "blocked",
+      "code": "bad_signature"
+    },
+    {
+      "category": "autenticidade",
+      "attack": "adultera texto cifrado",
+      "outcome": "blocked",
+      "code": "bad_signature"
+    },
+    {
+      "category": "autenticidade",
+      "attack": "troca certificado do remetente por outro agente",
+      "outcome": "blocked",
+      "code": "identity_mismatch"
+    },
+    {
+      "category": "autenticidade",
+      "attack": "organização forja mensagem de agente",
+      "outcome": "blocked",
+      "code": "bad_signature"
+    },
+    {
+      "category": "autenticidade",
+      "attack": "agente sem certificado da organização",
+      "outcome": "blocked",
+      "code": "bad_signature"
+    },
+    {
+      "category": "replay/tempo",
+      "attack": "reenvia requisição capturada",
+      "outcome": "blocked",
+      "code": "replay"
+    },
+    {
+      "category": "replay/tempo",
+      "attack": "entrega mensagem vencida",
+      "outcome": "blocked",
+      "code": "invalid_lifetime"
+    },
+    {
+      "category": "replay/tempo",
+      "attack": "entrega mensagem para outro destinatário",
+      "outcome": "blocked",
+      "code": "wrong_recipient"
+    },
+    {
+      "category": "autoridade",
+      "attack": "agente usa token roubado de outro",
+      "outcome": "blocked",
+      "code": "caveat_failed"
+    },
+    {
+      "category": "autoridade",
+      "attack": "remove caveat do token",
+      "outcome": "blocked",
+      "code": "bad_token"
+    },
+    {
+      "category": "autoridade",
+      "attack": "forja token sem a chave do servidor",
+      "outcome": "blocked",
+      "code": "bad_token"
+    },
+    {
+      "category": "autoridade",
+      "attack": "usa token de outra capacidade",
+      "outcome": "blocked",
+      "code": "bad_token"
+    },
+    {
+      "category": "autoridade",
+      "attack": "excede limite do token atenuado",
+      "outcome": "blocked",
+      "code": "caveat_failed"
+    },
+    {
+      "category": "autoridade",
+      "attack": "reusa token além de max_uses",
+      "outcome": "blocked",
+      "code": "caveat_failed"
+    },
+    {
+      "category": "autoridade",
+      "attack": "argumentos fora do esquema",
+      "outcome": "blocked",
+      "code": "invalid_arguments"
+    },
+    {
+      "category": "cadeia de suprimento",
+      "attack": "manifesto sem admissão da organização",
+      "outcome": "blocked",
+      "code": "bad_manifest"
+    },
+    {
+      "category": "cadeia de suprimento",
+      "attack": "manifesto contra-assinado por chave falsa",
+      "outcome": "blocked",
+      "code": "bad_signature"
+    },
+    {
+      "category": "cadeia de suprimento",
+      "attack": "edita descrição de manifesto admitido",
+      "outcome": "blocked",
+      "code": "bad_manifest"
+    },
+    {
+      "category": "cadeia de suprimento",
+      "attack": "manifesto assinado pela org mas fora do log",
+      "outcome": "blocked",
+      "code": "not_in_log"
+    },
+    {
+      "category": "cadeia de suprimento",
+      "attack": "rug pull: nova versão admitida troca a descrição",
+      "outcome": "blocked",
+      "code": "manifest_changed"
+    },
+    {
+      "category": "cadeia de suprimento",
+      "attack": "rug pull: token fixado em hash antigo",
+      "outcome": "blocked",
+      "code": "caveat_failed"
+    },
+    {
+      "category": "cadeia de suprimento",
+      "attack": "publicador sem papel 'publisher'",
+      "outcome": "blocked",
+      "code": "bad_publisher"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "ordem injetada via página web (sessão contaminada)",
+      "outcome": "blocked",
+      "code": "tainted_context"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "ordem injetada, modo por argumento",
+      "outcome": "blocked",
+      "code": "tainted_context"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "edita o carimbo para remover a marca WEB",
+      "outcome": "blocked",
+      "code": "bad_signature"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "carimbo de origem sem manifesto conhecido",
+      "outcome": "blocked",
+      "code": "tainted_context"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "host malicioso rotula saída da web como limpa",
+      "outcome": "blocked",
+      "code": "tainted_context"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "endosso de outra sessão",
+      "outcome": "blocked",
+      "code": "bad_endorsement"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "endosso para outra capacidade",
+      "outcome": "blocked",
+      "code": "bad_endorsement"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "endosso de principal sem papel endorser",
+      "outcome": "blocked",
+      "code": "bad_endorsement"
+    },
+    {
+      "category": "injeção de prompt",
+      "attack": "endosso expirado",
+      "outcome": "blocked",
+      "code": "bad_endorsement"
+    },
+    {
+      "category": "auditoria",
+      "attack": "harness omite carimbo da web (detecção a posteriori)",
+      "outcome": "detected",
+      "code": "detected_by_audit"
+    },
+    {
+      "category": "auditoria",
+      "attack": "host omite contaminação ao carimbar (detecção a posteriori)",
+      "outcome": "detected",
+      "code": "detected_by_audit"
+    },
+    {
+      "category": "revogação",
+      "attack": "agente revogado continua chamando",
+      "outcome": "blocked",
+      "code": "cert_revoked"
+    }
+  ],
+  "summary": {
+    "confidencialidade": {
+      "total": 2,
+      "defended": 2
+    },
+    "autenticidade": {
+      "total": 5,
+      "defended": 5
+    },
+    "replay/tempo": {
+      "total": 3,
+      "defended": 3
+    },
+    "autoridade": {
+      "total": 7,
+      "defended": 7
+    },
+    "cadeia de suprimento": {
+      "total": 7,
+      "defended": 7
+    },
+    "injeção de prompt": {
+      "total": 9,
+      "defended": 9
+    },
+    "auditoria": {
+      "total": 2,
+      "defended": 2
+    },
+    "revogação": {
+      "total": 1,
+      "defended": 1
+    }
+  },
+  "total": 36,
+  "defended": 36
+}

@@ -1,0 +1,57 @@
+{
+ "machine": {
+  "python": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel"
+ },
+ "micro": {
+  "seal_open": {
+   "256": {
+    "seal_ms": 0.0962,
+    "open_ms": 0.2374,
+    "envelope_bytes": 1020
+   },
+   "4096": {
+    "seal_ms": 0.1193,
+    "open_ms": 0.2751,
+    "envelope_bytes": 6140
+   },
+   "65536": {
+    "seal_ms": 0.4236,
+    "open_ms": 0.5998,
+    "envelope_bytes": 88060
+   }
+  },
+  "call_vs_stamps": {
+   "0": 1.204,
+   "1": 1.383,
+   "8": 2.5784,
+   "32": 7.9218,
+   "128": 25.7425
+  },
+  "sizes": {
+   "request_bytes": 1370,
+   "response_bytes": 1545,
+   "certificate_bytes": 262,
+   "token_bytes": 132
+  }
+ },
+ "agentdojo": {
+  "workspace": {
+   "tool_calls": 84,
+   "overhead_ms_per_call": 1.435
+  },
+  "travel": {
+   "tool_calls": 124,
+   "overhead_ms_per_call": 2.143
+  },
+  "banking": {
+   "tool_calls": 33,
+   "overhead_ms_per_call": 2.889
+  },
+  "slack": {
+   "tool_calls": 98,
+   "overhead_ms_per_call": 3.706
+  }
+ }
+}

@@ -42,24 +42,27 @@ def b64d(text: Any) -> bytes:
         raise SeloError("bad_encoding") from None
 
 
-def _reject_floats(obj: Any) -> None:
+def _check_json(obj: Any) -> None:
+    """Somente tipos JSON; floats finitos sao aceitos (repr de Python e deterministico)."""
     if isinstance(obj, float):
-        raise SeloError("float_not_allowed", "use inteiros (ex.: centavos) ou strings")
-    if isinstance(obj, dict):
+        if obj != obj or obj in (float("inf"), float("-inf")):
+            raise SeloError("float_not_allowed", "NaN/Infinity nao sao JSON")
+    elif isinstance(obj, dict):
         for key, value in obj.items():
             if not isinstance(key, str):
                 raise SeloError("bad_key_type")
-            _reject_floats(value)
+            _check_json(value)
     elif isinstance(obj, (list, tuple)):
         for value in obj:
-            _reject_floats(value)
+            _check_json(value)
     elif obj is not None and not isinstance(obj, (str, int, bool)):
         raise SeloError("bad_value_type")
 
 
 def canon(obj: Any) -> bytes:
-    """JSON canonico: chaves ordenadas, sem espacos, ASCII, sem floats (determinismo)."""
-    _reject_floats(obj)
+    """JSON canonico: chaves ordenadas, sem espacos, ASCII. Floats finitos usam o repr de Python
+    (ida e volta exata); a interoperabilidade entre linguagens exigiria RFC 8785."""
+    _check_json(obj)
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
                       allow_nan=False).encode()
 

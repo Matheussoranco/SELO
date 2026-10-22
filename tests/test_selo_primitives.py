@@ -175,7 +175,7 @@ class TokenTests(unittest.TestCase):
 class SchemaTests(unittest.TestCase):
     schema = {"properties": {"n": {"type": "integer", "minimum": 1, "maximum": 10},
                              "s": {"type": "string", "maxLength": 3},
-                             "e": {"enum": ["a", "b"]}}}
+                             "e": {"enum": ["a", "b"]}}, "required": ["n", "s", "e"]}
 
     def test_accepts_and_rejects(self):
         validate_args(self.schema, {"n": 5, "s": "abc", "e": "a"})
@@ -183,6 +183,32 @@ class SchemaTests(unittest.TestCase):
                     {"n": 5, "s": "a", "e": "z"}, {"n": 5, "s": "a"},
                     {"n": 5, "s": "a", "e": "a", "x": 1}, {"n": True, "s": "a", "e": "a"}):
             with self.assertRaises(ValueError):
+                validate_args(self.schema, bad)
+
+
+class SchemaRecursiveTests(unittest.TestCase):
+    schema = {
+        "type": "object",
+        "properties": {
+            "to": {"type": "array", "items": {"type": "string", "maxLength": 20}, "maxItems": 2},
+            "note": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "amount": {"type": "number", "minimum": 0},
+            "kind": {"$ref": "#/$defs/Kind"},
+            "meta": {"type": "object", "additionalProperties": True},
+        },
+        "required": ["to", "amount"],
+        "$defs": {"Kind": {"type": "string", "enum": ["a", "b"]}},
+    }
+
+    def test_valid_and_invalid(self):
+        validate_args(self.schema, {"to": ["x@y.z"], "amount": 10.5, "note": None, "kind": "a",
+                                    "meta": {"k": 1}})
+        validate_args(self.schema, {"to": [], "amount": 3})
+        for bad in ({"to": "x", "amount": 1}, {"to": ["a", "b", "c"], "amount": 1},
+                    {"to": [1], "amount": 1}, {"amount": 1}, {"to": [], "amount": -1},
+                    {"to": [], "amount": 1, "kind": "z"}, {"to": [], "amount": 1, "note": 5},
+                    {"to": [], "amount": 1, "extra": 1}):
+            with self.assertRaises(ValueError, msg=bad):
                 validate_args(self.schema, bad)
 
 
@@ -260,12 +286,14 @@ class EnvelopeTests(unittest.TestCase):
             self.open_as(self.erp)
         self.assertEqual(cm.exception.code, "invalid_lifetime")
 
-    def test_floats_are_rejected(self):
-        entry = self.a.remote_entry("erp")
-        with self.assertRaises(SeloError):
-            seal(org=self.w.org.params, sender_id="assistant", sender_sk=self.a.sig_sk,
-                 sender_cert=self.a.cert, recipient_id="erp", recipient_epoch=entry["epoch"],
-                 recipient_agree_pub=b64d(entry["agree_pub"]), body={"x": 1.5}, now=self.a.now())
+    def test_floats_roundtrip_but_non_finite_are_rejected(self):
+        import json as _json
+        value = {"x": 1.5, "y": [0.1, 1e-7, 123456789.123]}
+        self.assertEqual(_json.loads(canon(value)), value)
+        self.assertEqual(canon(_json.loads(canon(value))), canon(value))
+        for bad in (float("nan"), float("inf")):
+            with self.assertRaises(SeloError):
+                canon({"x": bad})
 
     def test_canonical_json_is_deterministic(self):
         self.assertEqual(canon({"b": 1, "a": [1, {"d": 2, "c": 3}]}),

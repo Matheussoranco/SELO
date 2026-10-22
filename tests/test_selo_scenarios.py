@@ -33,7 +33,8 @@ class Base(unittest.TestCase):
 
     def fresh_session(self):
         s = Session()
-        s.observe(self.alice.instruct("Pague a fatura INV-1."))
+        text = "Pague a fatura INV-1 de 1000 centavos."
+        s.observe(self.alice.instruct(text), text)
         return s
 
 
@@ -140,7 +141,7 @@ class PromptInjection(Base):
         self.w.clock.advance(31)
         with self.assertRaises(RemoteError) as cm:
             self.call("erp", "erp.pay_invoice", PAY, self.pay, s)
-        self.assertEqual(cm.exception.code, "bad_endorsement")
+        self.assertEqual(cm.exception.code, "tainted_context")
 
     def test_stamp_cannot_be_edited_to_drop_the_taint(self):
         s = self.injected_session()
@@ -349,13 +350,13 @@ class Hardening(Base):
         s.endorse(self.alice.endorse(stamp, ["WEB"], other_session))        # sessao errada
         with self.assertRaises(RemoteError) as cm:
             self.call("erp", "erp.pay_invoice", PAY, self.pay, s)
-        self.assertEqual(cm.exception.code, "bad_endorsement")
+        self.assertEqual(cm.exception.code, "tainted_context")
 
         s2, stamp2 = self.injected()
         s2.endorse(self.alice.endorse(stamp2, ["WEB"], s2, cap="erp.get_balance"))   # capacidade errada
         with self.assertRaises(RemoteError) as cm:
             self.call("erp", "erp.pay_invoice", PAY, self.pay, s2)
-        self.assertEqual(cm.exception.code, "bad_endorsement")
+        self.assertEqual(cm.exception.code, "tainted_context")
 
     def test_tokens_require_a_holder_by_default(self):
         with self.assertRaises(SeloError) as cm:
@@ -425,14 +426,14 @@ class Robustness(Base):
         base_tok = self.bal.to_dict()
         for i in range(300):
             body = {"t": "call", "cap": "erp.get_balance", "args": {"account": "matriz"},
-                    "token": base_tok, "ctx": {"sid": "s", "stamps": [], "endorsements": []},
+                    "token": base_tok, "ctx": {"sid": "s", "stamps": [], "endorsements": [], "scope": "full"},
                     "entry": self.a.my_entry()}
             for _ in range(rng.randint(1, 3)):
                 key = rng.choice(list(body))
                 body[key] = rng.choice(junk)
             if rng.random() < 0.3:
                 body["ctx"] = {"sid": rng.choice(junk), "stamps": rng.choice(junk),
-                               "endorsements": rng.choice(junk)}
+                               "endorsements": rng.choice(junk), "scope": rng.choice(junk + ["args"])}
             env = seal(org=self.w.org.params, sender_id="assistant", sender_sk=self.a.sig_sk,
                        sender_cert=self.a.cert, recipient_id="erp", recipient_epoch=entry["epoch"],
                        recipient_agree_pub=b64d(entry["agree_pub"]), body=body, now=self.a.now())
@@ -444,6 +445,52 @@ class Robustness(Base):
                                    agree_sk=self.a.keys.agree_key(reply["h"]["epoch"]),
                                    my_id="assistant", now=self.a.now())
             self.assertNotEqual(opened.body.get("code"), "internal_error", body)
+
+
+class ArgumentScope(Base):
+    def tainted(self):
+        s = self.fresh_session()
+        self.call("web", "web.fetch", {"url": MAL}, self.fetch, s)
+        return s
+
+    def pay_args(self, s, args):
+        return self.a.call("erp", "erp.pay_invoice", args, self.pay, s, self.w.send, scope="args")
+
+    def test_value_from_the_user_is_allowed_even_in_a_tainted_session(self):
+        s = self.tainted()
+        with self.assertRaises(RemoteError):                       # modo completo: bloqueia
+            self.call("erp", "erp.pay_invoice", {"invoice": "INV-1", "amount_cents": 1000}, self.pay, s)
+        out = self.pay_args(s, {"invoice": "INV-1", "amount_cents": 1000})
+        self.assertEqual(out["paid"], "INV-1")
+
+    def test_value_copied_from_untrusted_content_is_blocked(self):
+        with self.assertRaises(RemoteError) as cm:
+            self.pay_args(self.tainted(), PAY)
+        self.assertEqual(cm.exception.code, "tainted_context")
+
+    def test_value_with_unknown_origin_falls_back_to_full_context(self):
+        s = self.tainted()
+        with self.assertRaises(RemoteError) as cm:
+            self.pay_args(s, {"invoice": "INV-1", "amount_cents": 777})   # 777 nao esta em lugar nenhum
+        self.assertEqual(cm.exception.code, "tainted_context")
+
+    def test_host_can_require_full_context(self):
+        self.w.publish(self.erp, "pub-erp", new_manifest(
+            "erp.wire", "tool", "Transferencia internacional.",
+            {"properties": {"to": {"type": "string", "maxLength": 20}}}, "pub-erp",
+            forbid_taint=["WEB"], effect="external", context="full"), lambda a: {"ok": True})
+        tok = self.erp.mint("erp.wire", [{"holder": "assistant"}])
+        s = self.fresh_session()
+        with self.assertRaises(RemoteError) as cm:
+            self.a.call("erp", "erp.wire", {"to": "matriz"}, tok, s, self.w.send, scope="args")
+        self.assertEqual(cm.exception.code, "full_context_required")
+        self.assertEqual(self.a.call("erp", "erp.wire", {"to": "matriz"}, tok, s, self.w.send), {"ok": True})
+
+    def test_audit_does_not_flag_scoped_calls(self):
+        s = self.tainted()
+        self.pay_args(s, {"invoice": "INV-1", "amount_cents": 1000})
+        report = audit_traffic(self.w.org, self.w.traffic, "ciso", "rotina")
+        self.assertEqual(report["omissions"], [])
 
 
 if __name__ == "__main__":

@@ -18,13 +18,14 @@ from .util import SeloError, b64d, b64e, canon, sha256
 KINDS = {"tool", "skill"}
 EFFECTS = {"read", "write", "external"}
 MANIFEST_FIELDS = {"name", "kind", "version", "description", "schema", "publisher",
-                   "taint_out", "forbid_taint", "effect"}
+                   "taint_out", "forbid_taint", "effect", "context"}
+CONTEXT_MODES = {"any", "full"}      # "full": o host exige que o cliente cite TODO o contexto
 
 
 def validate_manifest(m: Any) -> Dict[str, Any]:
     if not isinstance(m, dict) or set(m) != MANIFEST_FIELDS:
         raise SeloError("bad_manifest", "campos")
-    if (m["kind"] not in KINDS or m["effect"] not in EFFECTS
+    if (m["kind"] not in KINDS or m["effect"] not in EFFECTS or m["context"] not in CONTEXT_MODES
             or not isinstance(m["name"], str) or not 0 < len(m["name"]) <= 64
             or not isinstance(m["description"], str) or len(m["description"]) > 2000
             or not isinstance(m["schema"], dict)
@@ -35,12 +36,14 @@ def validate_manifest(m: Any) -> Dict[str, Any]:
 
 
 def new_manifest(name: str, kind: str, description: str, schema: Dict[str, Any], publisher: str,
-                 taint_out=(), forbid_taint=(), effect: str = "read", version: str = "1.0.0"
-                 ) -> Dict[str, Any]:
+                 taint_out=(), forbid_taint=(), effect: str = "read", version: str = "1.0.0",
+                 context: str = "any") -> Dict[str, Any]:
+    if "properties" in schema and "required" not in schema:       # conveniencia: todos obrigatorios
+        schema = dict(schema, required=list(schema["properties"]))
     return validate_manifest({
         "name": name, "kind": kind, "version": version, "description": description,
         "schema": schema, "publisher": publisher, "taint_out": sorted(set(taint_out)),
-        "forbid_taint": sorted(set(forbid_taint)), "effect": effect})
+        "forbid_taint": sorted(set(forbid_taint)), "effect": effect, "context": context})
 
 
 def manifest_hash(m: Dict[str, Any]) -> str:
@@ -48,26 +51,72 @@ def manifest_hash(m: Dict[str, Any]) -> str:
 
 
 # --------------------------------------------------------------------------- argumentos
+_MAX_DEPTH = 8
+
+
+def _resolve(rule: Dict[str, Any], defs: Dict[str, Any]) -> Dict[str, Any]:
+    ref = rule.get("$ref")
+    if isinstance(ref, str) and ref.startswith("#/$defs/") and ref[8:] in defs:
+        return defs[ref[8:]]
+    return rule
+
+
+def _check(value: Any, rule: Dict[str, Any], defs: Dict[str, Any], path: str, depth: int) -> None:
+    """Subconjunto de JSON Schema: type, enum, anyOf/oneOf, $ref, items, properties/required,
+    minimum/maximum, maxLength/maxItems. Palavras-chave desconhecidas sao ignoradas."""
+    if depth > _MAX_DEPTH:
+        raise ValueError(f"{path}: profundidade excedida")
+    rule = _resolve(rule, defs)
+    for key in ("anyOf", "oneOf"):
+        if key in rule:
+            for option in rule[key]:
+                try:
+                    _check(value, option, defs, path, depth + 1)
+                    return
+                except ValueError:
+                    continue
+            raise ValueError(f"{path}: nenhuma alternativa confere")
+    if "enum" in rule and value not in rule["enum"]:
+        raise ValueError(f"{path}: fora do enum")
+    t = rule.get("type")
+    if t == "null" and value is not None:
+        raise ValueError(f"{path}: esperado null")
+    if t == "string" and (not isinstance(value, str) or len(value) > rule.get("maxLength", 100_000)):
+        raise ValueError(f"{path}: string invalida")
+    if t == "integer" and (type(value) is not int
+                           or not rule.get("minimum", -2**63) <= value <= rule.get("maximum", 2**63)):
+        raise ValueError(f"{path}: inteiro invalido")
+    if t == "number" and (type(value) not in (int, float)
+                          or not rule.get("minimum", -1e300) <= value <= rule.get("maximum", 1e300)):
+        raise ValueError(f"{path}: numero invalido")
+    if t == "boolean" and not isinstance(value, bool):
+        raise ValueError(f"{path}: booleano invalido")
+    if t == "array":
+        if not isinstance(value, list) or len(value) > rule.get("maxItems", 10_000):
+            raise ValueError(f"{path}: array invalido")
+        for i, item in enumerate(value):
+            _check(item, rule.get("items", {}), defs, f"{path}[{i}]", depth + 1)
+    if t == "object" or "properties" in rule:
+        props = rule.get("properties", {})
+        if not isinstance(value, dict):
+            raise ValueError(f"{path}: esperado objeto")
+        extra = set(value) - set(props)
+        if extra and (props or depth == 0) and not rule.get("additionalProperties"):
+            raise ValueError(f"{path}: campos extras {sorted(extra)}")
+        required = set(rule.get("required", ()))            # padrao JSON Schema: ausente = nenhum
+        if required - set(value):
+            raise ValueError(f"{path}: campos ausentes {sorted(required - set(value))}")
+        for name, sub in props.items():
+            if name in value:
+                _check(value[name], sub, defs, f"{path}.{name}", depth + 1)
+
+
 def validate_args(schema: Dict[str, Any], args: Any) -> None:
-    """Subconjunto de JSON Schema: object com properties string/integer/boolean/enum, sem extras."""
-    props = schema.get("properties", {})
-    required = set(schema.get("required", props))
-    if not isinstance(args, dict) or set(args) - set(props) or required - set(args):
-        raise ValueError("argumentos nao conferem com o esquema")
-    for name, rule in props.items():
-        if name not in args:
-            continue
-        v = args[name]
-        if "enum" in rule and v not in rule["enum"]:
-            raise ValueError(f"{name}: fora do enum")
-        t = rule.get("type")
-        if t == "string" and (not isinstance(v, str) or len(v) > rule.get("maxLength", 4000)):
-            raise ValueError(f"{name}: string invalida")
-        if t == "integer" and (type(v) is not int or not rule.get("minimum", -2**63) <= v
-                               <= rule.get("maximum", 2**63)):
-            raise ValueError(f"{name}: inteiro invalido")
-        if t == "boolean" and not isinstance(v, bool):
-            raise ValueError(f"{name}: booleano invalido")
+    """Valida os argumentos de uma chamada contra o esquema do manifesto (levanta ValueError)."""
+    if not isinstance(args, dict):
+        raise ValueError("argumentos devem ser um objeto")
+    _check(args, schema if "type" in schema or "properties" in schema else dict(schema, type="object"),
+           schema.get("$defs", {}), "args", 0)
 
 
 # --------------------------------------------------------------------------- documentos

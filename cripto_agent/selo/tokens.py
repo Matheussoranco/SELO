@@ -72,6 +72,10 @@ class TokenContext:
     uses: Callable[[str], int]             # quantas vezes o token ja foi usado com sucesso
 
 
+def _num(x: Any) -> bool:
+    return type(x) in (int, float)
+
+
 def _field(args: Dict[str, Any], name: Any) -> Any:
     if not isinstance(name, str) or name not in args:
         raise SeloError("caveat_failed", f"argumento ausente: {name}")
@@ -96,7 +100,7 @@ def _check(c: Dict[str, Any], ctx: TokenContext, ident: str) -> None:
         if not isinstance(value, dict):
             raise SeloError("caveat_failed", "caveat malformado")
         v = _field(ctx.args, value.get("field"))
-        ok = type(v) is int and type(value.get("max")) is int and v <= value["max"]
+        ok = _num(v) and _num(value.get("max")) and v <= value["max"]
     elif kind == "arg_in":
         if not isinstance(value, dict):
             raise SeloError("caveat_failed", "caveat malformado")

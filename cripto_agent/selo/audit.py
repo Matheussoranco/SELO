@@ -38,7 +38,8 @@ def audit_traffic(org: Organization, envelopes: List[Dict[str, Any]], auditor: s
         for res in results:
             origin = calls.get(res.body["re"])
             if (origin is not None and origin.header["sender"] == agent
-                    and origin.body["ctx"]["sid"] == sid and order[res.header["msg"]] < order[call_id]
+                    and origin.body["ctx"]["sid"] == sid and call.body["ctx"]["scope"] == "full"
+                    and order[res.header["msg"]] < order[call_id]
                     and res.body["stamp"]["b"]["h"] not in cited):
                 omissions.append({"agent": agent, "sid": sid, "call": call_id,
                                   "missing_result_from": res.header["sender"],

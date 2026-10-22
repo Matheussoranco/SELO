@@ -13,7 +13,9 @@ do contexto. O LLM nao e confiavel; a omissao pelo harness e detectavel por audi
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set
 
@@ -22,7 +24,7 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from .keys import OrgParams, sign_doc, verify_cert, verify_doc
 from .util import SeloError, b64d, b64e, content_hash
 
-MAX_STAMPS = 64
+MAX_STAMPS = 256
 UNKNOWN = "UNKNOWN_SOURCE"          # marca imposta a origens sem manifesto conhecido
 KINDS = {"user", "result"}
 
@@ -69,7 +71,9 @@ def make_endorsement(*, user_id: str, sk: ed25519.Ed25519PrivateKey, cert: Dict[
 
 
 def verify_endorsement(org: OrgParams, doc: Any, now: float, sid: str, cap: str,
-                       revoked: Optional[set] = None) -> Dict[str, Any]:
+                       revoked: Optional[set] = None) -> Optional[Dict[str, Any]]:
+    """Endosso autentico e aplicavel -> corpo; autentico mas fora de escopo/validade -> None
+    (ignorado: uma sessao carrega endossos de varias capacidades); forjado/sem papel -> erro."""
     if not isinstance(doc, dict) or set(doc) != {"b", "sig", "cert"}:
         raise SeloError("bad_endorsement")
     cert = verify_cert(org, doc["cert"], at=now, revoked=revoked)
@@ -77,10 +81,11 @@ def verify_endorsement(org: OrgParams, doc: Any, now: float, sid: str, cap: str,
     if not isinstance(b, dict) or cert["id"] != b.get("by") or "endorser" not in cert["roles"]:
         raise SeloError("bad_endorsement", "papel")
     verify_doc(b64d(cert["sig_pub"]), "selo/endorse", {"b": b, "sig": doc["sig"]})
-    if not (type(b.get("ts")) is int and type(b.get("exp")) is int and b["ts"] <= now < b["exp"]):
-        raise SeloError("bad_endorsement", "validade")
-    if not isinstance(b.get("remove"), list) or b.get("sid") != sid or b.get("cap") not in ("", cap):
-        raise SeloError("bad_endorsement", "escopo")
+    if (type(b.get("ts")) is not int or type(b.get("exp")) is not int
+            or not isinstance(b.get("remove"), list)):
+        raise SeloError("bad_endorsement", "forma")
+    if not b["ts"] <= now < b["exp"] or b.get("sid") != sid or b.get("cap") not in ("", cap):
+        return None
     return b
 
 
@@ -91,7 +96,8 @@ def effective_taint(org: OrgParams, stamps: List[Any], endorsements: List[Any], 
     - marcas removidas por endosso valido).  Carimbo invalido = requisicao rejeitada."""
     if len(stamps) > MAX_STAMPS or len(endorsements) > MAX_STAMPS:
         raise SeloError("too_many_stamps")
-    valid_end = [verify_endorsement(org, e, now, sid, cap, revoked) for e in endorsements]
+    valid_end = [b for b in (verify_endorsement(org, e, now, sid, cap, revoked) for e in endorsements)
+                 if b is not None]
     total: Set[str] = set()
     for doc in stamps:
         b = verify_stamp(org, doc, revoked)
@@ -109,16 +115,69 @@ def effective_taint(org: OrgParams, stamps: List[Any], endorsements: List[Any], 
     return total
 
 
+def _leaves(value: Any) -> List[str]:
+    """Folhas relevantes de um argumento: strings (>= 3 caracteres) e numeros, em minusculas."""
+    out: List[str] = []
+    if isinstance(value, bool) or value is None:
+        return out
+    if isinstance(value, str):
+        if len(value.strip()) >= 3:
+            out.append(value.strip().lower())
+    elif isinstance(value, (int, float)):
+        out.append(str(value).lower())
+    elif isinstance(value, dict):
+        for v in value.values():
+            out.extend(_leaves(v))
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            out.extend(_leaves(v))
+    return out
+
+
+def _contains(text: str, leaf: str) -> bool:
+    if leaf.replace(".", "", 1).replace("-", "", 1).isdigit():
+        return re.search(r"(?<![\w.])" + re.escape(leaf) + r"(?![\w])", text) is not None
+    return leaf in text
+
+
 @dataclass
 class Session:
-    """Contexto de um agente (lado do harness): lista monotona de carimbos observados."""
+    """Contexto de um agente (lado do harness): lista monotona de carimbos observados.
+
+    O harness guarda tambem o TEXTO de cada item (nunca enviado) para o modo `args`, em que cada
+    chamada cita apenas os carimbos dos itens de onde vieram seus argumentos."""
 
     sid: str = field(default_factory=lambda: b64e(os.urandom(9)))
     stamps: List[Dict[str, Any]] = field(default_factory=list)
     endorsements: List[Dict[str, Any]] = field(default_factory=list)
+    texts: Dict[str, str] = field(default_factory=dict)         # hash do conteudo -> texto local
 
-    def observe(self, stamp: Dict[str, Any]) -> None:
+    def observe(self, stamp: Dict[str, Any], content: Any = None) -> None:
         self.stamps.append(stamp)
+        if content is not None:
+            self.texts[stamp["b"]["h"]] = (content if isinstance(content, str)
+                                           else json.dumps(content, ensure_ascii=False)).lower()
+
+    def cite_for(self, args: Dict[str, Any], only: Any = None) -> List[Dict[str, Any]]:
+        """Carimbos a citar para uma chamada com estes argumentos (modo `args`).
+
+        Cada folha do argumento e atribuida a itens do contexto por casamento textual. Folha
+        presente em instrucao do usuario e confiavel. Folha sem origem conhecida (ex.: o modelo
+        a inventou ou a transformou) faz o harness citar TODO o contexto (conservador)."""
+        if only is not None:
+            args = {k: v for k, v in args.items() if k in set(only)}
+        user = [s for s in self.stamps if s["b"]["kind"] == "user"]
+        user_text = " ".join(self.texts.get(s["b"]["h"], "") for s in user)
+        cited = {id(s): s for s in user}
+        for leaf in _leaves(args):
+            if _contains(user_text, leaf):
+                continue
+            hit = [s for s in self.stamps if s["b"]["kind"] != "user"
+                   and _contains(self.texts.get(s["b"]["h"], ""), leaf)]
+            if not hit:
+                return list(self.stamps)
+            cited.update({id(s): s for s in hit})
+        return [s for s in self.stamps if id(s) in cited]
 
     def endorse(self, endorsement: Dict[str, Any]) -> None:
         self.endorsements.append(endorsement)
