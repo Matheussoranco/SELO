@@ -134,7 +134,7 @@ def main():
         print("\n[ADULTERACAO] aceita?! (falha de seguranca)")
     except Exception as error:
         print("\n[ADULTERACAO de 1 byte no no do meio] A recebeu erro:", getattr(error, "code", error))
-    print("  execucoes do token no ERP:", dict(w.agents["erp"]._uses))
+    print("  usos reservados do token no ERP:", w.agents["erp"].token_uses())
     for s in servers:
         s.stop()
 
@@ -143,7 +143,7 @@ def main():
     a.call("erp", "erp.pay_invoice", AMOUNT, token, session(w), http_send)
     time.sleep(0.5)
     print("\n[REPLAY pelo no do meio] resposta ao reenvio:", tap.replay_status)
-    print("  execucoes do token no ERP:", dict(w.agents["erp"]._uses))
+    print("  usos reservados do token no ERP:", w.agents["erp"].token_uses())
     for s in servers:
         s.stop()
 

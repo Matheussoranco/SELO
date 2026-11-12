@@ -69,7 +69,7 @@ class TokenContext:
     now: float
     args: Dict[str, Any]
     taint: Set[str]
-    uses: Callable[[str], int]             # quantas vezes o token ja foi usado com sucesso
+    uses: Callable[[str], int]             # tentativas autorizadas ja reservadas
 
 
 def _num(x: Any) -> bool:
@@ -93,7 +93,8 @@ def _check(c: Dict[str, Any], ctx: TokenContext, ident: str) -> None:
     elif kind == "manifest":
         ok = ctx.manifest_hash == value
     elif kind == "forbid_taint":
-        ok = isinstance(value, list) and not (set(value) & ctx.taint)
+        ok = (isinstance(value, list) and all(isinstance(v, str) for v in value)
+              and not (set(value) & ctx.taint))
     elif kind == "max_uses":
         ok = type(value) is int and ctx.uses(ident) < value
     elif kind == "arg_max":

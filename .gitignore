@@ -13,3 +13,6 @@ relatorio/*.pdf
 colab/*.zip
 *.pdf
 __pycache__/
+.coverage
+.mypy_cache/
+.pytest_cache/

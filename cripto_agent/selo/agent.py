@@ -60,19 +60,21 @@ class Agent:
         self.extra_forbid = extra_forbid or {}
         self.manifests = manifests or ManifestStore(org, clock, revoked=self.revoked)
         self.caps: Dict[str, Capability] = {}
-        self._uses: Dict[str, int] = {}
+
         self._entries: Dict[tuple, Dict[str, Any]] = {}
         self._my_entry: Optional[Dict[str, Any]] = None
         self._lock = threading.Lock()
         self._db = sqlite3.connect(db, check_same_thread=False)
         self._db.execute("CREATE TABLE IF NOT EXISTS seen "
                          "(sender TEXT, msg TEXT, exp INTEGER, PRIMARY KEY(sender, msg))")
+        self._db.execute("CREATE TABLE IF NOT EXISTS token_uses "
+                         "(id TEXT PRIMARY KEY, uses INTEGER NOT NULL)")
         self._db.commit()
 
     def close(self) -> None:
         self._db.close()
 
-    # ------------------------------------------------------------------ utilitarios
+
     def now(self) -> int:
         return int(self.clock())
 
@@ -98,7 +100,7 @@ class Agent:
             raise SeloError("entry_mismatch")
         return body
 
-    # ------------------------------------------------------------------ capacidades
+
     def register(self, bundle: Any, handler: Callable[[Dict[str, Any]], Dict[str, Any]],
                  upgrade: bool = False) -> str:
         """Registra uma capacidade local a partir de (manifesto admitido, prova, STH)."""
@@ -113,9 +115,15 @@ class Agent:
         """Emite um token de capacidade. Por padrao exige caveat `holder` (nada de token ao portador)."""
         if self.token_root is None or cap not in self.caps:
             raise SeloError("cannot_mint")
+        caveats = tuple(caveats)
         if not bearer and not any("holder" in c for c in caveats):
             raise SeloError("holder_required")
         return mint(self.token_root, cap, caveats)
+
+    def token_uses(self) -> Dict[str, int]:
+        """Tentativas autorizadas, incluindo handlers que falharam apos a reserva."""
+        with self._lock:
+            return dict(self._db.execute("SELECT id, uses FROM token_uses"))
 
     def catalog(self) -> List[Any]:
         """Manifestos assinados + provas de inclusao: publico, nao carrega segredos."""
@@ -137,7 +145,7 @@ class Agent:
             self.manifests.check_pin(m["name"], manifest_hash(m), approve)
         return m
 
-    # ------------------------------------------------------------------ servidor
+
     def _reserve(self, opened: Opened) -> None:
         h = opened.header
         with self._lock, self._db:
@@ -209,22 +217,29 @@ class Agent:
         if self.token_root is None:
             raise SeloError("no_tokens")
         token = Token.from_dict(body["token"])
-        verify_token(self.token_root, token, TokenContext(
-            sender=sender, cap=m["name"], manifest_hash=capability.mhash, now=now,
-            args=body["args"], taint=taint, uses=lambda i: self._uses.get(i, 0)))
+        with self._lock, self._db:
+            # Reserve before external effects; BEGIN IMMEDIATE also serializes other connections.
+            self._db.execute("BEGIN IMMEDIATE")
+            row = self._db.execute("SELECT uses FROM token_uses WHERE id = ?",
+                                   (token.ident,)).fetchone()
+            uses = row[0] if row else 0
+            verify_token(self.token_root, token, TokenContext(
+                sender=sender, cap=m["name"], manifest_hash=capability.mhash, now=now,
+                args=body["args"], taint=taint, uses=lambda _i: uses))
+            self._db.execute("INSERT INTO token_uses VALUES (?, 1) "
+                             "ON CONFLICT(id) DO UPDATE SET uses = uses + 1", (token.ident,))
 
         try:
             result = capability.handler(body["args"])
         except ValueError as error:
             raise SeloError("invalid_arguments", str(error)) from None
-        with self._lock:
-            self._uses[token.ident] = self._uses.get(token.ident, 0) + 1
+
         stamp = make_stamp(origin_id=self.id, sk=self.sig_sk, cert=self.cert, content=result,
                            taint=taint | set(m["taint_out"]), ts=now, kind="result",
                            cap=m["name"], manifest=capability.mhash)
         return {"t": "result", "re": opened.header["msg"], "result": result, "stamp": stamp}
 
-    # ------------------------------------------------------------------ cliente
+
     def call(self, recipient_id: str, cap: str, args: Dict[str, Any], token: Token,
              session: Session, send: Send, ttl: int = DEFAULT_TTL, scope: str = "full",
              cite_only: Optional[Any] = None) -> Dict[str, Any]:

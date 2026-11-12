@@ -13,6 +13,8 @@ O cliente stdio e minimo e independente do SDK (mensagens JSON-RPC delimitadas p
 from __future__ import annotations
 
 import json
+import math
+import queue
 import subprocess
 import threading
 from dataclasses import dataclass, field
@@ -31,6 +33,8 @@ class McpError(SeloError):
 
 class McpStdioClient:
     def __init__(self, command: List[str], env: Optional[Dict[str, str]] = None, timeout: float = 30.0):
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout deve ser positivo e finito")
         self.command, self.env, self.timeout = command, env, timeout
         self._proc: Optional[subprocess.Popen] = None
         self._lock = threading.Lock()
@@ -38,15 +42,21 @@ class McpStdioClient:
         self.server_info: Dict[str, Any] = {}
 
     def start(self) -> "McpStdioClient":
+        if self._proc is not None:
+            raise McpError("mcp_started")
         self._proc = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                       stderr=subprocess.DEVNULL, env=self.env, text=True, encoding="utf-8",
                                       bufsize=1)
-        result = self.request("initialize", {
-            "protocolVersion": PROTOCOL_VERSION, "capabilities": {},
-            "clientInfo": {"name": "selo-bridge", "version": "0.2"}})
-        self.server_info = result.get("serverInfo", {})
-        self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        return self
+        try:
+            result = self.request("initialize", {
+                "protocolVersion": PROTOCOL_VERSION, "capabilities": {},
+                "clientInfo": {"name": "selo-bridge", "version": "0.2"}})
+            self.server_info = result.get("serverInfo", {})
+            self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+            return self
+        except Exception:
+            self.close()
+            raise
 
     def _send(self, message: Dict[str, Any]) -> None:
         assert self._proc and self._proc.stdin
@@ -55,43 +65,86 @@ class McpStdioClient:
 
     def request(self, method: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         with self._lock:
-            assert self._proc and self._proc.stdout
+            if self._proc is None or self._proc.poll() is not None:
+                raise McpError("mcp_closed")
             self._next_id += 1
             ident = self._next_id
-            self._send({"jsonrpc": "2.0", "id": ident, "method": method, "params": params or {}})
-            while True:
-                line = self._proc.stdout.readline()
-                if not line:
-                    raise McpError("mcp_closed", "o servidor MCP encerrou")
+            outcome = queue.Queue(maxsize=1)
+
+            def exchange():
                 try:
-                    message = json.loads(line)
-                except ValueError:
-                    continue
-                if message.get("id") != ident:
-                    continue                                 # notificacao ou requisicao do servidor: ignorar
-                if "error" in message:
-                    raise McpError("mcp_error", str(message["error"].get("message", ""))[:200])
-                return message.get("result", {})
+                    outcome.put((self._exchange(ident, method, params), None))
+                except Exception as error:
+                    outcome.put((None, error))
+
+            # Pipes de subprocessos no Windows nao suportam select(). O prazo
+            # cobre escrita e leitura, inclusive servidores que nunca enviam '\n'.
+            worker = threading.Thread(target=exchange, daemon=True)
+            worker.start()
+            try:
+                result, error = outcome.get(timeout=self.timeout)
+            except queue.Empty:
+                self.close()
+                worker.join(timeout=1)
+                raise McpError("mcp_timeout") from None
+            if error is not None:
+                if not isinstance(error, McpError) or error.code != "mcp_error":
+                    self.close()
+                raise error
+            return result
+
+    def _exchange(self, ident, method, params):
+        self._send({"jsonrpc": "2.0", "id": ident, "method": method, "params": params or {}})
+        while True:
+            line = self._proc.stdout.readline()
+            if not line:
+                raise McpError("mcp_closed", "o servidor MCP encerrou")
+            try:
+                message = json.loads(line)
+            except ValueError:
+                raise McpError("mcp_protocol") from None
+            if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
+                raise McpError("mcp_protocol")
+            if "method" in message:
+                if "id" in message:
+                    self._send({"jsonrpc": "2.0", "id": message["id"], "error": {
+                        "code": -32601, "message": "metodo nao suportado"}})
+                continue
+            if type(message.get("id")) is not int or message["id"] != ident:
+                continue
+            if ("result" in message) == ("error" in message):
+                raise McpError("mcp_protocol")
+            if "error" in message:
+                if not isinstance(message["error"], dict):
+                    raise McpError("mcp_protocol")
+                raise McpError("mcp_error", str(message["error"].get("message", ""))[:200])
+            if not isinstance(message["result"], dict):
+                raise McpError("mcp_protocol")
+            return message["result"]
 
     def list_tools(self) -> List[Dict[str, Any]]:
-        tools, cursor = [], None
+        tools, cursor, seen = [], None, set()
         while True:
             page = self.request("tools/list", {"cursor": cursor} if cursor else {})
             tools.extend(page.get("tools", []))
             cursor = page.get("nextCursor")
             if not cursor:
                 return tools
+            if not isinstance(cursor, str) or cursor in seen:
+                raise McpError("mcp_pagination")
+            seen.add(cursor)
 
     def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         return self.request("tools/call", {"name": name, "arguments": arguments})
 
     def close(self) -> None:
-        if self._proc and self._proc.poll() is None:
-            try:
-                self._proc.stdin.close()
-                self._proc.wait(timeout=5)
-            except Exception:
+        if self._proc is not None:
+            if self._proc.poll() is None:
                 self._proc.kill()
+            self._proc.wait()
+            for stream in (self._proc.stdin, self._proc.stdout):
+                if stream is not None:
+                    stream.close()
 
 
 def result_to_text(result: Dict[str, Any]) -> str:
@@ -109,8 +162,13 @@ def tool_to_manifest(tool: Dict[str, Any], publisher: str,
     """Tool MCP -> manifesto SELO. Padroes do MCP: readOnlyHint=false, destructiveHint=true,
     openWorldHint=true (a especificacao assume o pior caso quando nada e declarado)."""
     ann = tool.get("annotations") or {}
-    read_only = bool(ann.get("readOnlyHint", False))
-    open_world = bool(ann.get("openWorldHint", True))
+    if not isinstance(ann, dict):
+        raise McpError("mcp_annotations")
+    for hint in ("readOnlyHint", "openWorldHint"):
+        if hint in ann and type(ann[hint]) is not bool:
+            raise McpError("mcp_annotations", hint)
+    read_only = ann.get("readOnlyHint", False)
+    open_world = ann.get("openWorldHint", True)
     effect = "read" if read_only else ("external" if open_world else "write")
     taint_out = ["EXTERNAL"] if (read_only and open_world) else []
     forbid = [] if read_only else ["EXTERNAL"]

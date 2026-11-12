@@ -24,7 +24,7 @@ class SeloError(Exception):
 
 
 def check_id(value: Any) -> str:
-    if not isinstance(value, str) or not ID_RE.match(value):
+    if not isinstance(value, str) or not ID_RE.fullmatch(value):
         raise SeloError("invalid_id", "identificador deve casar com [a-z0-9][a-z0-9._-]{0,62}")
     return value
 

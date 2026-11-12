@@ -14,7 +14,7 @@ import ssl
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, Optional, Set
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from .agent import Agent
 from .envelope import MAX_ENVELOPE
@@ -39,39 +39,45 @@ def _make_handler(routes_post: Dict[str, Callable[[Any], Any]],
 
         def _reply(self, status: int, payload: Any) -> None:
             data = json.dumps(payload, separators=(",", ":")).encode()
+            # Nao reutilizar conexoes com corpos nao consumidos ou framing rejeitado.
+            self.close_connection = True
             self.send_response(status)
+            self.send_header("Connection", "close")
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
 
         def do_GET(self) -> None:
-            url = urlsplit(self.path)
-            fn = routes_get.get(url.path)
             try:
+                url = urlsplit(self.path)
+                fn = routes_get.get(url.path)
                 if fn is None:
                     return self._reply(404, {"error": "not_found"})
                 result = fn(parse_qs(url.query))
                 self._reply(200 if result is not None else 404, result if result is not None
                             else {"error": "not_found"})
-            except SeloError:
+            except (SeloError, ValueError, KeyError):
                 self._reply(400, {"error": "rejected"})
             except Exception:
                 LOG.error("get_failed")
                 self._reply(500, {"error": "internal"})
 
         def do_POST(self) -> None:
-            fn = routes_post.get(urlsplit(self.path).path)
             try:
+                fn = routes_post.get(urlsplit(self.path).path)
                 if fn is None:
                     return self._reply(404, {"error": "not_found"})
                 lengths = self.headers.get_all("Content-Length", [])
-                if len(lengths) != 1 or self.headers.get("Transfer-Encoding"):
+                if (len(lengths) != 1 or "Transfer-Encoding" in self.headers
+                        or not lengths[0].isascii() or not lengths[0].isdecimal()):
                     return self._reply(400, {"error": "rejected"})
                 size = int(lengths[0])
                 if not 0 < size <= MAX_ENVELOPE + 4096:
                     return self._reply(413, {"error": "too_large"})
                 raw = self.rfile.read(size)
+                if len(raw) != size:
+                    return self._reply(400, {"error": "rejected"})
                 self._reply(200, fn(json.loads(raw)))
             except (SeloError, ValueError, UnicodeError) as error:
                 LOG.info("rejected code=%s", getattr(error, "code", "parse"))
@@ -184,15 +190,18 @@ class OrgClient:
                                             ssl_context=ssl_context))
 
     def directory(self, agent_id: str, epoch: int) -> Dict[str, Any]:
-        return _request(f"{self.url}/org/v1/entry?id={agent_id}&epoch={epoch}", "GET",
+        query = urlencode({"id": agent_id, "epoch": epoch})
+        return _request(f"{self.url}/org/v1/entry?{query}", "GET",
                         ssl_context=self.ssl)
 
     def entry(self, agent_id: str) -> Dict[str, Any]:
-        return _request(f"{self.url}/org/v1/entry?id={agent_id}", "GET", ssl_context=self.ssl)
+        query = urlencode({"id": agent_id})
+        return _request(f"{self.url}/org/v1/entry?{query}", "GET", ssl_context=self.ssl)
 
     def manifest_bundle(self, h: str) -> Any:
         try:
-            return _request(f"{self.url}/org/v1/manifest?h={h}", "GET", ssl_context=self.ssl)
+            query = urlencode({"h": h})
+            return _request(f"{self.url}/org/v1/manifest?{query}", "GET", ssl_context=self.ssl)
         except SeloError:
             return None
 
