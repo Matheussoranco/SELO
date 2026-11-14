@@ -315,3 +315,64 @@ def _flip_b64(c: int) -> int:
         j = _B64.index(c)
         return _B64[(j + 1) % 64]
     return c ^ 0x01
+
+
+class TcpTap:
+    """Encaminhador TCP que grava os bytes brutos nos dois sentidos (serve para TLS)."""
+
+    def __init__(
+        self, target_host: str, target_port: int, listen_host: str = "127.0.0.1"
+    ) -> None:
+        import socket
+
+        self.target = (target_host, target_port)
+        self.sock = socket.socket()
+        self.sock.bind((listen_host, 0))
+        self.sock.listen(16)
+        self.port = self.sock.getsockname()[1]
+        self.data = bytearray()
+        self._lock = threading.Lock()
+        self._stop = False
+        threading.Thread(target=self._accept, daemon=True).start()
+
+    def _accept(self) -> None:
+        import socket
+
+        while not self._stop:
+            try:
+                c, _ = self.sock.accept()
+            except OSError:
+                return
+            try:
+                u = socket.create_connection(self.target, timeout=30)
+            except OSError:
+                c.close()
+                continue
+            for a, b in ((c, u), (u, c)):
+                threading.Thread(target=self._pipe, args=(a, b), daemon=True).start()
+
+    def _pipe(self, src, dst) -> None:
+        try:
+            while True:
+                chunk = src.recv(65536)
+                if not chunk:
+                    break
+                with self._lock:
+                    self.data += chunk
+                dst.sendall(chunk)
+        except OSError:
+            pass
+        finally:
+            for s in (src, dst):
+                try:
+                    s.close()
+                except OSError:
+                    pass
+
+    def seen(self, needle: bytes) -> bool:
+        with self._lock:
+            return needle in self.data
+
+    def stop(self) -> None:
+        self._stop = True
+        self.sock.close()
