@@ -243,7 +243,7 @@ class FileKeyStore(KeyStore):
     def _pw(self) -> bytes:
         pw = self._password or os.environ.get("SELO_KEY_PASSWORD")
         if not pw:
-            if not sys.stdin or not sys.stdin.isatty():
+            if not _interactive():
                 raise SeloError(
                     "keystore_password",
                     "defina SELO_KEY_PASSWORD para o cofre em arquivo",
@@ -283,6 +283,23 @@ class FileKeyStore(KeyStore):
             self._kdf(self._pw(), salt), nonce, self.MAGIC + key.encode(), data
         )
         _write_private(self._path(key), self.MAGIC + salt + nonce + ct)
+
+
+def _interactive() -> bool:
+    """Ha um terminal de verdade para digitar a senha?
+
+    No Windows, o dispositivo NUL tambem responde isatty(); so um console aceita
+    GetConsoleMode."""
+    if not sys.stdin or not sys.stdin.isatty():
+        return False
+    if sys.platform != "win32":
+        return True
+    import ctypes
+    import msvcrt
+
+    mode = ctypes.c_uint32()
+    handle = msvcrt.get_osfhandle(sys.stdin.fileno())
+    return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)))
 
 
 def open_keystore(backend: str, state_dir: str, account: str) -> KeyStore:
