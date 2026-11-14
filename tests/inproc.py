@@ -78,10 +78,33 @@ class InNode:
     def send(self, peer: "InNode", text: str) -> Dict[str, Any]:
         return self.sc.call(peer.url, send_message(text))
 
-    def restart(self) -> None:
-        """Reinicia o sidecar com o mesmo cofre e o mesmo diretorio de estado."""
+    def restart(self, cfg: Optional[Dict[str, Any]] = None) -> None:
+        """Reinicia o sidecar com o mesmo cofre e o mesmo diretorio de estado.
+
+        `cfg` (opcional) e mesclado a configuracao atual; chaves com valor None sao apagadas.
+        """
         self.sc.stop()
+        if cfg:
+            self.cfg = deep_merge(self.cfg, cfg)
+            for k, v in cfg.items():
+                if v is None:
+                    self.cfg.pop(k, None)
         self.sc = Sidecar(self.cfg, keystore=self.keystore, clock=self.clock).start()
+
+    def join(
+        self, org: Any, trust_orgs: Optional[list] = None, descriptor: Any = None
+    ) -> None:
+        """Atesta este agente pela organizacao `org` e reinicia o sidecar como membro."""
+        att = org.attest(self.agent_id, self.clock())
+        self.restart(
+            {
+                "org": {
+                    "descriptor": descriptor or org.descriptor(self.clock()),
+                    "attestation": att,
+                },
+                "trust": {"orgs": trust_orgs or []},
+            }
+        )
 
     def stop(self) -> None:
         self.sc.stop()

@@ -312,7 +312,7 @@ A configuração pode apontar `policy` para um chamável `módulo:função`. Ele
 | `policy_denied` | −32093 | recusa do gancho de política |
 | `peer_untrusted` | −32094 | par fora da política de confiança |
 | `push_destination_denied` | −32095 | destino push recusado |
-| `card_stale`, `kel_fork`, `identity_revoked`, `revocations_stale`, `bad_signature`, `bad_ciphertext`, `replay`, `invalid_lifetime`, `wrong_recipient`, `escrow_required` | HTTP 4xx | falhas de verificação |
+| `card_stale`, `kel_fork`, `identity_revoked`, `peer_revoked` (revogado pela organização), `bad_attestation`, `bad_org_doc`, `revocations_stale`, `bad_signature`, `bad_ciphertext`, `replay`, `invalid_lifetime`, `wrong_recipient`, `escrow_required` | HTTP 4xx | falhas de verificação |
 
 ## 17. Decisões registradas
 
