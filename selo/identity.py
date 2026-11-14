@@ -168,8 +168,9 @@ class Identity:
     _state: Optional[KelState] = field(default=None, repr=False)
 
     @classmethod
-    def generate(cls, now: int) -> "Identity":
-        sig, agree = ed25519_generate(), x25519_generate()
+    def generate(cls, now: int, sig: Any = None, agree: Any = None) -> "Identity":
+        """Nova identidade. `sig`/`agree` fixos so para vetores de teste."""
+        sig, agree = sig or ed25519_generate(), agree or x25519_generate()
         body = {
             "t": "inception",
             "seq": 0,
@@ -212,10 +213,10 @@ class Identity:
             raise SeloError("wrong_recipient", "chave anterior indisponivel")
         return self.agree_keys[-1 - offset]
 
-    def rotate(self, now: int) -> None:
+    def rotate(self, now: int, sig: Any = None, agree: Any = None) -> None:
         if self.state.revoked:
             raise SeloError("identity_revoked")
-        sig, agree = ed25519_generate(), x25519_generate()
+        sig, agree = sig or ed25519_generate(), agree or x25519_generate()
         body = {
             "t": "rotation",
             "seq": self.seq + 1,

@@ -1,0 +1,199 @@
+{
+ "description": "Vetores do SELO v1 (docs/spec/selo-v1.md, secao 18). Chaves privadas = SHA-256('selo/1/test-vector' || 0x00 || rotulo).",
+ "time": 1800000000,
+ "keys": {
+  "alice-sig-0": "cae71218199438b314e6aecc8f8885a5a2200cab5f2783ab1f01a53d6d02d299",
+  "alice-agree-0": "e71529e90ab33b2c0c41c43452d1595b957f371f32668c7cb95e9ed47a93c0d6",
+  "alice-sig-1": "3448b209d18da095cee2e7dda9f2477f92300b3bcb87d18c7d2c07fe663a2009",
+  "alice-agree-1": "cbafff7cad1ade51613ba404c8d7e7603cdbf1db636eb6cbeff996b7eb3798fb",
+  "bob-sig-0": "1c338707063f370ec153b71f51e831519d7f54802cc9c158c8c0eb3bd8034631",
+  "bob-agree-0": "7da6f18084bf4a5ae8132e2489aa45cd63d617ec7632c7ca3960d01e6b8f2d71",
+  "envelope-eph": "1d847e7b8c3f0914f5eb69c5ccc37352e5503d960eadc1dd953ff320eb560517",
+  "hs-init-eph": "e325752f160509da49fc83f6565a615db70026348f61a177cdc1968f45fffbd5",
+  "hs-resp-eph": "acb6df5d35270cf323162be3f98b5eeaf66220a36e4e1b06b42894451ea5ab26",
+  "ratchet-alice-dh-0": "cedafed2ebf9f9ec03b88c8427e1e234055a967c7ab46c6238e983b1ff0b048f"
+ },
+ "public": {
+  "alice-sig-0": "032f7510d986f189a694b269fe0d573b7ecb7109ba31a153235c5b04e09fbd59",
+  "alice-agree-1": "b14b95dd1da58e9d360d5e4edcda1e1b4e4fab70a17aca968c2a1b562afb1517",
+  "bob-agree-0": "bdb8d72b4ca58d86a6e797b7fcc2416efdb02465788603638dd6f53ba3d4a05e"
+ },
+ "agent_id": {
+  "alice": "selo:xlGKIu8mzYtMnrxYM0h7bALQn_xrWXWk",
+  "bob": "selo:c_0jsvN4IiYa7pkqJD1cxsLOGngaCz-_"
+ },
+ "kel_alice_inception": [
+  {
+   "body": {
+    "t": "inception",
+    "seq": 0,
+    "sig_pub": "Ay91ENmG8YmmlLJp_g1XO37LcQm6MaFTI1xbBOCfvVk",
+    "agree_pub": "dQQZhJZUEpEbJypA16Ar6rI0vdP37bpK8uXCRH2Bekc",
+    "iat": 1800000000
+   },
+   "sigs": [
+    "aEseQzsxy9Mn9jMEZ_O5BQ9_c-l6y9KQdc3CsNubbUonLQtyKXioJS7WXwfOHo-CsqrIty-WfSoHt__YX9KnCQ"
+   ]
+  }
+ ],
+ "kel_alice": [
+  {
+   "body": {
+    "t": "inception",
+    "seq": 0,
+    "sig_pub": "Ay91ENmG8YmmlLJp_g1XO37LcQm6MaFTI1xbBOCfvVk",
+    "agree_pub": "dQQZhJZUEpEbJypA16Ar6rI0vdP37bpK8uXCRH2Bekc",
+    "iat": 1800000000
+   },
+   "sigs": [
+    "aEseQzsxy9Mn9jMEZ_O5BQ9_c-l6y9KQdc3CsNubbUonLQtyKXioJS7WXwfOHo-CsqrIty-WfSoHt__YX9KnCQ"
+   ]
+  },
+  {
+   "body": {
+    "t": "rotation",
+    "seq": 1,
+    "prev": "RTam_ki-vogO3icghBo0lF0A6n8Uu1Yk4FFeANZGguE",
+    "sig_pub": "SlfSMR6ouh5tu6DXnhDvOKXQ9NYmhxyKGgW-1QleCkg",
+    "agree_pub": "sUuV3R2ljp02DV5O3NoeG05Pq3ChesqWjCobVir7FRc",
+    "iat": 1800000060
+   },
+   "sigs": [
+    "3YPCUdbYzMra72CfFmk0-qRV2icx_xVSKngNJTI0oPaRd5wjC-mG3ovxnIXnYILncRNWDHTdYLAj6I9bgPPMBg",
+    "v5h6HGjwRac_uRjFOzIesKKhUHJkxWuvELSmOFORDBcBHdhAi0JShMdhJCf1QMv5PNvDWMxnLlF1RmXXAcRHBQ"
+   ]
+  }
+ ],
+ "card_bob": {
+  "name": "bob",
+  "description": "Agente SELO bob",
+  "version": "1.0.0",
+  "supportedInterfaces": [
+   {
+    "url": "https://bob.example",
+    "protocolBinding": "JSONRPC",
+    "protocolVersion": "1.0"
+   }
+  ],
+  "capabilities": {
+   "streaming": true,
+   "pushNotifications": true,
+   "extensions": [
+    {
+     "uri": "https://github.com/Matheussoranco/cripto_agent/blob/main/docs/spec/selo-v1.md",
+     "required": true,
+     "description": "SELO: A2A cifrado de ponta a ponta. Requisicoes em claro sao recusadas.",
+     "params": {
+      "v": "selo/1",
+      "suite": "x25519-sha256-chachapoly",
+      "agent_id": "selo:c_0jsvN4IiYa7pkqJD1cxsLOGngaCz-_",
+      "kel": [
+       {
+        "body": {
+         "t": "inception",
+         "seq": 0,
+         "sig_pub": "1CazTi5kk41D-QCoGdR0DFYN8FhlX6XFdXYhYwgaA3k",
+         "agree_pub": "vbjXK0yljYam55e3_MJBbv2wJGV4hgNjjdb1O6PUoF4",
+         "iat": 1800000000
+        },
+        "sigs": [
+         "1rtnjU_D1z8SHiBIhA0dalfQsjrDeVfuUAQfrsUP75UdoyOleRcBF_ETPhn2zDbcIZcNf2mlrSNF24d6koQCCA"
+        ]
+       }
+      ],
+      "iat": 1800000000,
+      "exp": 1800086400,
+      "attestations": [],
+      "endpoints": {
+       "envelope": "/selo/v1/envelope",
+       "session": "/selo/v1/session",
+       "push": "/selo/v1/push"
+      }
+     }
+    }
+   ]
+  },
+  "defaultInputModes": [
+   "text/plain",
+   "application/json"
+  ],
+  "defaultOutputModes": [
+   "text/plain",
+   "application/json"
+  ],
+  "skills": [
+   {
+    "id": "default",
+    "name": "bob",
+    "description": "bob",
+    "tags": [
+     "selo"
+    ]
+   }
+  ],
+  "signatures": [
+   {
+    "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6InNlbG86Y18wanN2TjRJaVlhN3BrcUpEMWN4c0xPR25nYUN6LV8jMCIsInR5cCI6IkpPU0UifQ",
+    "signature": "L78veG7L6CiFASyJQpKy09urjDLlWFBA7-BYAPyB7OJizUkPfY1ckqkARIrc4UmCTuSGvQDMdnmSo6EodITGDQ"
+   }
+  ]
+ },
+ "card_bob_jcs_without_signatures": "{\"capabilities\":{\"extensions\":[{\"description\":\"SELO: A2A cifrado de ponta a ponta. Requisicoes em claro sao recusadas.\",\"params\":{\"agent_id\":\"selo:c_0jsvN4IiYa7pkqJD1cxsLOGngaCz-_\",\"attestations\":[],\"endpoints\":{\"envelope\":\"/selo/v1/envelope\",\"push\":\"/selo/v1/push\",\"session\":\"/selo/v1/session\"},\"exp\":1800086400,\"iat\":1800000000,\"kel\":[{\"body\":{\"agree_pub\":\"vbjXK0yljYam55e3_MJBbv2wJGV4hgNjjdb1O6PUoF4\",\"iat\":1800000000,\"seq\":0,\"sig_pub\":\"1CazTi5kk41D-QCoGdR0DFYN8FhlX6XFdXYhYwgaA3k\",\"t\":\"inception\"},\"sigs\":[\"1rtnjU_D1z8SHiBIhA0dalfQsjrDeVfuUAQfrsUP75UdoyOleRcBF_ETPhn2zDbcIZcNf2mlrSNF24d6koQCCA\"]}],\"suite\":\"x25519-sha256-chachapoly\",\"v\":\"selo/1\"},\"required\":true,\"uri\":\"https://github.com/Matheussoranco/cripto_agent/blob/main/docs/spec/selo-v1.md\"}],\"pushNotifications\":true,\"streaming\":true},\"defaultInputModes\":[\"text/plain\",\"application/json\"],\"defaultOutputModes\":[\"text/plain\",\"application/json\"],\"description\":\"Agente SELO bob\",\"name\":\"bob\",\"skills\":[{\"description\":\"bob\",\"id\":\"default\",\"name\":\"bob\",\"tags\":[\"selo\"]}],\"supportedInterfaces\":[{\"protocolBinding\":\"JSONRPC\",\"protocolVersion\":\"1.0\",\"url\":\"https://bob.example\"}],\"version\":\"1.0.0\"}",
+ "envelope": {
+  "rpc": {
+   "jsonrpc": "2.0",
+   "id": 1,
+   "method": "SendMessage",
+   "params": {
+    "message": {
+     "messageId": "m-1",
+     "role": "ROLE_USER",
+     "parts": [
+      {
+       "text": "ola"
+      }
+     ]
+    }
+   }
+  },
+  "envelope_msg": "03e8e5cc0c21a1102093548b2fadd1d9",
+  "header_jcs": "{\"exp\":1800000180,\"iat\":1800000120,\"msg\":\"A-jlzAwhoRAgk1SLL63R2Q\",\"recipient\":\"selo:c_0jsvN4IiYa7pkqJD1cxsLOGngaCz-_\",\"recipient_seq\":0,\"sender\":\"selo:xlGKIu8mzYtMnrxYM0h7bALQn_xrWXWk\",\"sender_card\":\"https://alice.example\",\"sender_seq\":1,\"t\":\"req\",\"v\":\"selo/1\"}",
+  "value": {
+   "h": {
+    "v": "selo/1",
+    "t": "req",
+    "sender": "selo:xlGKIu8mzYtMnrxYM0h7bALQn_xrWXWk",
+    "sender_card": "https://alice.example",
+    "sender_seq": 1,
+    "recipient": "selo:c_0jsvN4IiYa7pkqJD1cxsLOGngaCz-_",
+    "recipient_seq": 0,
+    "msg": "A-jlzAwhoRAgk1SLL63R2Q",
+    "iat": 1800000120,
+    "exp": 1800000180
+   },
+   "enc": "bCLu26a_jsBfAY0d3dNjK0Cst_yYBbGnC-C8zEMuBHE",
+   "ct": "n49sN9gNpxVLenUCHO44MizGUQKS3YjKAoBAXXJj1MrY4Ko_uKZhFxHkpYno4iYlQr1TcCbHbJb9fOn8d-4oER-GZmqR2lG9WOQ39yZkEQjAquQoW0ESj69WQEySBq7oNMWt7TfXq1CDg-rrE5YRypecXI-mq0woSncxIenv3iaUuJqxg8Qqba-XYRclQTOtLldtFKWZzkucrcn0",
+   "sig": "hyPYWnoDKy0qC_-etnM-W0a-mq6VlOIsNFDa4xjEWehreht_HjvG4m6UdK77wv5uoIIRzjnWVUSjDlUbSztEAw"
+  }
+ },
+ "session": {
+  "prologue": "73656c6f2f312f73657373696f6e007b22726573706f6e646572223a2273656c6f3a635f306a73764e344969596137706b714a44316378734c4f476e6761437a2d5f222c22726573706f6e6465725f736571223a307d",
+  "m1_payload": "{\"agent_id\":\"selo:xlGKIu8mzYtMnrxYM0h7bALQn_xrWXWk\",\"card\":\"https://alice.example\",\"iat\":1800000120,\"seq\":1}",
+  "m1": "b8465b1dec60b67f1a66ac2d829715b52b51dfa23be565cbc08399dd84e67b7cdb44c7b41cc4dfb55b04f344efaccc6cead8a7b5f3588da7f03ffaea490f507b966f7eee73b1c7c85bda19f675c51da952f36b41b6972575d5c2f90b45e6047b512dde11474576192a7bd391fb1acdaa79ab38c15972928bd90540328f4b2b3ea90da9192a1122f1d58b7cb03301b32920d3a3a424defed131a1bc0d52ea018258b5ca436608acf65fd8aa9c8cb54d79ea0ac5607739f64ee5811dc2517e2320b2a4e38b0d5b617c490254d4",
+  "m2_payload": "{\"exp\":1800086520,\"sid\":\"izp0qnM97H-rHCTGY2D3Ig\"}",
+  "m2": "562e981c1ed5b31e6ee830d84ce1ef12e9f9bd2e23f5d4b5494180a5c5f2ff393c438a54c6e558f48e1cbb785ba3022c12c3b4f2c961c379cd890db01be879bcc2c3674f460fab8b1a192317cb3c1adb2ac888c7456817d28cda7ce828646a99d1",
+  "handshake_hash": "764a85f8bfbeb84089902a57b7f38f06da47b8d4b9d8b27c0685241bf6474d53",
+  "ratchet_root": "cb87ec444b95564bca05a3568147cc4c3fd610c7de61451577d2b272b207b05f",
+  "first_message": {
+   "sid": "izp0qnM97H-rHCTGY2D3Ig",
+   "hdr": {
+    "dh": "89Fo-WGtIXebnmi0BM8jBheWpa1TFKmo8NSvIM3jOhE",
+    "pn": 0,
+    "n": 0
+   },
+   "ad": "7b22646972223a22693272222c22736964223a22697a7030716e4d3937482d7248435447593244334967227d7b226468223a223839466f2d574774495865626e6d6930424d386a4268655770613154464b6d6f384e5376494d336a4f6845222c226e223a302c22706e223a307de3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "ct": "TFBilH6Qjfhqowh4NW42i3itNVeNjvdZK0Cv5SeUyr0r6c3Q3e7goov1ozSoLxkWk054HM1_amXtvoQbEx8eP-1aeLO8w7vpfBvZ4a4b83IVAVwTCCWjwjWcuzbAoDVoK8sABO4S-yubjc9f-FcEjhacxm73OhWRiNAzk86mxAqWDArHnO_zl7hayKlixfEedKg-d_mxjFFr5Xhb",
+   "plaintext": "{\"rpc\":{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"SendMessage\",\"params\":{\"message\":{\"messageId\":\"m-1\",\"parts\":[{\"text\":\"ola\"}],\"role\":\"ROLE_USER\"}}}}"
+  }
+ }
+}

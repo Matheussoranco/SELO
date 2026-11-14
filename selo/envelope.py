@@ -60,7 +60,10 @@ def seal(
     ttl: int = DEFAULT_TTL,
     re: Optional[str] = None,
     escrow: Optional[EscrowTarget] = None,
+    _fixed: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """Sela um envelope. `_fixed` ({"msg": bytes, "eph": X25519PrivateKey}) existe so para
+    gerar vetores de teste deterministicos; nunca use em producao."""
     if t not in TYPES or (t == "resp") != (re is not None):
         raise SeloError("bad_envelope", "tipo/re")
     if not 0 < ttl <= MAX_TTL:
@@ -77,14 +80,16 @@ def seal(
         "sender_seq": sender.seq,
         "recipient": recipient.agent_id,
         "recipient_seq": recipient.kel.seq,
-        "msg": b64u(os.urandom(16)),
+        "msg": b64u(_fixed["msg"] if _fixed else os.urandom(16)),
         "iat": iat,
         "exp": iat + ttl,
     }
     if re is not None:
         h["re"] = re
     aad = jcs.canonicalize(h)
-    enc, ctx = hpke.setup_base_s(recipient.agree_pub, INFO)
+    enc, ctx = hpke.setup_base_s(
+        recipient.agree_pub, INFO, _fixed["eph"] if _fixed else None
+    )
     capsule = make_capsule(escrow, aad, ctx.key + ctx.base_nonce) if escrow else None
     ct = ctx.seal(aad, plaintext)
     sig = sender.sig_key.sign(
