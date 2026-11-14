@@ -1,11 +1,11 @@
 """Linha de comando do SELO.
 
-  python -m cripto_agent demo                   cenarios narrados (uso, injecao, rug pull, auditoria)
-  python -m cripto_agent bench                  tamanhos e latencias
-  python -m cripto_agent lint --mcp CMD...      lista as tools de um servidor MCP (stdio), sugere
+  python -m selo_v0 demo                   cenarios narrados (uso, injecao, rug pull, auditoria)
+  python -m selo_v0 bench                  tamanhos e latencias
+  python -m selo_v0 lint --mcp CMD...      lista as tools de um servidor MCP (stdio), sugere
                                                 rotulos SELO e aponta riscos (poisoning, sumidouros
                                                 sem politica, nomes confundiveis)
-  python -m cripto_agent lint --json FILE       o mesmo para manifestos em JSON (lista)
+  python -m selo_v0 lint --json FILE       o mesmo para manifestos em JSON (lista)
 """
 
 import argparse
@@ -14,7 +14,7 @@ import sys
 
 
 def _lint(manifests) -> int:
-    from .selo.lint import lint_manifests
+    from .lint import lint_manifests
     print(f"{'tool':28} {'effect':9} {'taint_out':12} {'forbids':12}")
     for m in manifests:
         print(f"{m['name'][:28]:28} {m['effect']:9} {','.join(m['taint_out']) or '-':12} "
@@ -30,7 +30,7 @@ def _lint(manifests) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="cripto_agent", description="Protocolo SELO")
+    parser = argparse.ArgumentParser(prog="selo_v0", description="Protocolo SELO")
     sub = parser.add_subparsers(dest="cmd", required=True)
     demo_p = sub.add_parser("demo")
     demo_p.add_argument("--lang", choices=["en", "pt"], default="pt")
@@ -41,13 +41,13 @@ def main() -> int:
     group.add_argument("--json", help="JSON file with a list of manifests")
     args = parser.parse_args()
     if args.cmd == "demo":
-        from .selo import demo
+        from . import demo
         demo.demo(args.lang)
     elif args.cmd == "bench":
-        from .selo import demo
+        from . import demo
         demo.bench()
     else:
-        from .selo.mcp_bridge import McpStdioClient, tool_to_manifest
+        from .mcp_bridge import McpStdioClient, tool_to_manifest
         if args.mcp:
             client = McpStdioClient(args.mcp).start()
             try:

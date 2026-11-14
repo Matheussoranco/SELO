@@ -7,7 +7,7 @@ if not exist .venv\Scripts\python.exe (
     python -m venv .venv || goto :erro
     .venv\Scripts\python -m pip install -q -e . || goto :erro
 )
-.venv\Scripts\python -m cripto_agent demo %*
+.venv\Scripts\python -m selo_v0 demo %*
 echo.
 pause
 exit /b 0

@@ -7,9 +7,9 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
-from cripto_agent.selo import RemoteError, Session
-from cripto_agent.selo.mcp_bridge import McpBridge, McpError, McpStdioClient, tool_to_manifest
-from cripto_agent.selo.sandbox import World
+from selo_v0 import RemoteError, Session
+from selo_v0.mcp_bridge import McpBridge, McpError, McpStdioClient, tool_to_manifest
+from selo_v0.sandbox import World
 
 SERVER = str(Path(__file__).with_name("fake_mcp_server.py"))
 

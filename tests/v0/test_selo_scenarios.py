@@ -6,13 +6,13 @@ import json
 import unittest
 from unittest import mock
 
-from cripto_agent.selo import RemoteError, Session, SeloError
-from cripto_agent.selo.audit import audit_traffic
-from cripto_agent.selo.manifest import (manifest_hash, new_manifest, org_countersign,
+from selo_v0 import RemoteError, Session, SeloError
+from selo_v0.audit import audit_traffic
+from selo_v0.manifest import (manifest_hash, new_manifest, org_countersign,
                                         publisher_sign)
-from cripto_agent.selo.provenance import make_stamp
-from cripto_agent.selo.sandbox import World
-from cripto_agent.selo.tokens import Token
+from selo_v0.provenance import make_stamp
+from selo_v0.sandbox import World
+from selo_v0.tokens import Token
 
 MAL, BEN = "https://noticias.example/maliciosa", "https://noticias.example/benigna"
 PAY = {"invoice": "INV-999", "amount_cents": 900000}
@@ -166,7 +166,7 @@ class PromptInjection(Base):
     def test_origin_cannot_lower_the_manifest_taint(self):
         """Um host malicioso que carimba saida da web com taint vazio ainda e contaminado pelo manifesto."""
         s = self.fresh_session()
-        with mock.patch("cripto_agent.selo.agent.make_stamp",
+        with mock.patch("selo_v0.agent.make_stamp",
                         lambda **kw: make_stamp(**dict(kw, taint=()))):
             self.call("web", "web.fetch", {"url": MAL}, self.fetch, s)
         self.assertEqual(s.stamps[-1]["b"]["taint"], [])
@@ -196,7 +196,7 @@ class AuditOfOmissions(Base):
 
     def test_host_that_drops_taint_is_detected(self):
         s = self.fresh_session()
-        with mock.patch("cripto_agent.selo.agent.make_stamp",
+        with mock.patch("selo_v0.agent.make_stamp",
                         lambda **kw: make_stamp(**dict(kw, taint=()))):
             self.call("web", "web.fetch", {"url": MAL}, self.fetch, s)
         report = audit_traffic(self.w.org, self.w.traffic, "ciso", "rotina")
@@ -327,8 +327,8 @@ class NetworkHygiene(Base):
 
     def test_organization_cannot_impersonate_an_agent(self):
         """Ler != forjar: a organizacao nao tem a chave de assinatura do agente."""
-        from cripto_agent.selo.envelope import seal
-        from cripto_agent.selo.util import b64d
+        from selo_v0.envelope import seal
+        from selo_v0.util import b64d
         entry = self.a.remote_entry("erp")
         forged = seal(org=self.w.org.params, sender_id="assistant", sender_sk=self.w.org._sig_sk,
                       sender_cert=self.a.cert, recipient_id="erp", recipient_epoch=entry["epoch"],
@@ -417,8 +417,8 @@ class Robustness(Base):
     def test_authenticated_but_malformed_bodies_never_cause_internal_errors(self):
         """Corpo autenticado e cifrado corretamente, mas com campos absurdos."""
         import random
-        from cripto_agent.selo.envelope import open_envelope, seal
-        from cripto_agent.selo.util import b64d
+        from selo_v0.envelope import open_envelope, seal
+        from selo_v0.util import b64d
         rng = random.Random(11)
         entry = self.a.remote_entry("erp")
         junk = [None, 1, -1, "x", "", [], {}, [1], {"a": 1}, True, 10**30, "A" * 300, [None] * 70,

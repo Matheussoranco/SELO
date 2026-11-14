@@ -1,4 +1,4 @@
-"""Demonstracao narrada do SELO (python -m cripto_agent demo) e microbenchmark (… bench)."""
+"""Demonstracao narrada do SELO (python -m selo_v0 demo) e microbenchmark (… bench)."""
 
 from __future__ import annotations
 

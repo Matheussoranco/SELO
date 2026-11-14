@@ -3,15 +3,15 @@
 import json
 import unittest
 
-from cripto_agent.selo import SeloError
-from cripto_agent.selo.envelope import open_envelope, seal
-from cripto_agent.selo.keys import EpochKeys, agree_private, pub_raw, seed_at, seed_epoch0
-from cripto_agent.selo.manifest import (MerkleLog, inclusion_path, merkle_root, validate_args,
+from selo_v0 import SeloError
+from selo_v0.envelope import open_envelope, seal
+from selo_v0.keys import EpochKeys, agree_private, pub_raw, seed_at, seed_epoch0
+from selo_v0.manifest import (MerkleLog, inclusion_path, merkle_root, validate_args,
                                         verify_inclusion)
-from cripto_agent.selo.sandbox import World
-from cripto_agent.selo.shamir import P, combine, random_secret, split
-from cripto_agent.selo.tokens import Token, TokenContext, mint, verify
-from cripto_agent.selo.util import b64d, canon
+from selo_v0.sandbox import World
+from selo_v0.shamir import P, combine, random_secret, split
+from selo_v0.tokens import Token, TokenContext, mint, verify
+from selo_v0.util import b64d, canon
 
 
 def is_probable_prime(n):

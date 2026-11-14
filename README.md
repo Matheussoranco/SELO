@@ -1,4 +1,6 @@
-# Cripto Agent — protocolo SELO
+# SELO
+
+> **Em transição para o SELO v1.** O SELO v1 é uma extensão do A2A com criptografia de ponta a ponta nativa, desenvolvida no pacote `selo/` (spec: issue #1). O texto abaixo descreve o **protótipo v0**, que agora vive em `selo_v0/` e será a base do pacote opcional de defesa contra injeção de prompt. Os protocolos antigos (`legado/`) foram removidos; o histórico git os preserva.
 
 Prova de conceito em Python para chamadas entre agentes, tools e skills: envelopes cifrados e assinados, tokens atenuáveis, manifestos admitidos pela organização e controle de integridade por rótulos de proveniência. **Não é produto pronto para produção nem uma solução geral contra injeção de prompt.** O núcleo não executa um LLM: o integrador fornece o harness e os handlers.
 
@@ -11,7 +13,7 @@ Windows (PowerShell, sem necessidade de ativar o ambiente):
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m cripto_agent demo
+.\.venv\Scripts\python.exe -m selo_v0 demo
 ```
 
 Linux/macOS:
@@ -19,7 +21,7 @@ Linux/macOS:
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -e .
-.venv/bin/python -m cripto_agent demo
+.venv/bin/python -m selo_v0 demo
 ```
 
 Nos comandos seguintes, `python` deve ser o interpretador desse ambiente. A instalação pode baixar pacotes do índice configurado no pip. A demo usa objetos locais e dados simulados; não requer chave de API nem serviço de LLM. `demo.bat` e `demo.sh` também automatizam a preparação e a demonstração.
@@ -27,12 +29,12 @@ Nos comandos seguintes, `python` deve ser o interpretador desse ambiente. A inst
 ## Uso e testes
 
 ```sh
-python -m cripto_agent demo --lang pt
-python -m cripto_agent bench
-python -m unittest discover -s tests
-python -m unittest discover -s tests -p "test_selo_*.py"
+python -m selo_v0 demo --lang pt
+python -m selo_v0 bench
+python -m unittest discover -s tests -t .
+python -m unittest discover -s tests/v0 -t .
 python experiments/tap_lab.py
-python -m cripto_agent lint --mcp python tests/fake_mcp_server.py
+python -m selo_v0 lint --mcp python tests/v0/fake_mcp_server.py
 ```
 
 - `bench` mede custos locais; não representa latência em produção.
@@ -44,12 +46,11 @@ Após as correções da revisão de 08/11/2026, `python -B -m unittest discover 
 
 ## Componentes e integração
 
-- `cripto_agent/selo/envelope.py`, `keys.py`: X25519, HKDF-SHA256, ChaCha20-Poly1305 e Ed25519; hierarquia de chaves por época. Construção própria inspirada em HPKE, **não uma implementação interoperável da RFC 9180**.
+- `selo_v0/envelope.py`, `keys.py`: X25519, HKDF-SHA256, ChaCha20-Poly1305 e Ed25519; hierarquia de chaves por época. Construção própria inspirada em HPKE, **não uma implementação interoperável da RFC 9180**.
 - `agent.py`, `tokens.py`: chamadas, anti-replay SQLite e caveats de autorização.
 - `manifest.py`, `lint.py`, `mcp_bridge.py`: admissão de manifestos, Merkle, fixação por hash, heurísticas e ponte MCP stdio mínima.
 - `provenance.py`: sessões, carimbos e endossos. `org.py` e `audit.py`: autoridade e auditoria sobre envelopes capturados.
 - `sandbox.py`: `World().standard()` cria uma organização, agentes e principais de laboratório. **O nome não significa isolamento de processos.**
-- `cripto_agent/legado/`: protocolos anteriores; não confundir suas opções e garantias com as do SELO.
 
 O integrador deve registrar handlers locais, provisionar certificados e sementes por canal autenticado externo ao serviço HTTP, revisar/admitir manifestos e configurar transporte. Não há comando CLI de implantação de servidores: `serve_org`, `serve_agent`, `OrgClient` e `http_send` são APIs Python.
 
@@ -92,7 +93,7 @@ A ponte MCP usa JSON-RPC por stdin/stdout local; o processo MCP e os handlers po
 A aplicação deve capturar e guardar os envelopes de **requisições e respostas em ordem**, com controle de acesso e retenção definida. O transporte não fornece um coletor persistente automático. A organização pode executar:
 
 ```python
-from cripto_agent.selo.audit import audit_traffic
+from selo_v0.audit import audit_traffic
 resultado = audit_traffic(org, envelopes, auditor="identificacao-do-revisor", reason="motivo autorizado")
 ```
 
@@ -114,4 +115,8 @@ Experimentos podem gravar em `results/` e sobrescrever resultados; escolha outro
 
 ## Licença
 
-Esta revisão não escolhe nem concede uma licença. Confirme com o titular os termos de uso e distribuição antes de redistribuir o projeto.
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+Copyright (c) 2025-2026 Matheus Soranço. Licenciado sob a **Creative Commons Atribuição-NãoComercial-CompartilhaIgual 4.0 Internacional** (SPDX: `CC-BY-NC-SA-4.0`); o texto legal está em `LICENSE`.
+
+Em resumo (o texto legal prevalece): você pode copiar, adaptar e redistribuir, com atribuição, apenas para fins não comerciais, e adaptações devem usar a mesma licença. A licença não concede direitos de patente nem de marca. O GitHub exibe "NOASSERTION" porque seu detector não reconhece licenças Creative Commons NonCommercial.

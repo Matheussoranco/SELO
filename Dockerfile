@@ -2,8 +2,9 @@
 FROM python:3.12-slim
 WORKDIR /app
 COPY pyproject.toml ./
-COPY cripto_agent ./cripto_agent
+COPY selo ./selo
+COPY selo_v0 ./selo_v0
 COPY experiments ./experiments
 COPY tests ./tests
 RUN pip install --no-cache-dir .
-CMD ["python", "-m", "cripto_agent", "demo"]
+CMD ["python", "-m", "selo_v0", "demo"]

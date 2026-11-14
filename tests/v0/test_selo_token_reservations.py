@@ -4,9 +4,9 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from cripto_agent.selo import Agent, RemoteError, Session, SeloError
-from cripto_agent.selo.sandbox import World
-from cripto_agent.selo.util import check_id
+from selo_v0 import Agent, RemoteError, Session, SeloError
+from selo_v0.sandbox import World
+from selo_v0.util import check_id
 
 
 class TokenReservations(unittest.TestCase):

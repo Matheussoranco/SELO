@@ -8,9 +8,9 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
-from cripto_agent.selo import RemoteError, Session
-from cripto_agent.selo.sandbox import World
-from cripto_agent.selo.transport import (OrgClient, fetch_catalog, http_send, serve_agent,
+from selo_v0 import RemoteError, Session
+from selo_v0.sandbox import World
+from selo_v0.transport import (OrgClient, fetch_catalog, http_send, serve_agent,
                                          serve_org, _make_handler, _Server)
 
 MAL = "https://noticias.example/maliciosa"
@@ -134,7 +134,7 @@ class HttpRegressionTests(unittest.TestCase):
     def test_directory_query_values_are_encoded(self):
         client = OrgClient("http://localhost", None)
         value = "alice&epoch=0# +/ç"
-        with patch("cripto_agent.selo.transport._request", return_value={}) as request:
+        with patch("selo_v0.transport._request", return_value={}) as request:
             client.directory(value, 7)
             self.assertEqual(parse_qs(urlsplit(request.call_args.args[0]).query),
                              {"id": [value], "epoch": ["7"]})

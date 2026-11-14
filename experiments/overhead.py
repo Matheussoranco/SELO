@@ -18,10 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "experiments"))
 
-from cripto_agent.selo import Session  # noqa: E402
-from cripto_agent.selo.envelope import open_envelope, seal  # noqa: E402
-from cripto_agent.selo.sandbox import World  # noqa: E402
-from cripto_agent.selo.util import b64d  # noqa: E402
+from selo_v0 import Session  # noqa: E402
+from selo_v0.envelope import open_envelope, seal  # noqa: E402
+from selo_v0.sandbox import World  # noqa: E402
+from selo_v0.util import b64d  # noqa: E402
 
 
 def median_ms(fn, n: int) -> float:

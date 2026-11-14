@@ -1,7 +1,7 @@
 import unittest
 
-from cripto_agent.selo.lint import lint_manifest, lint_manifests
-from cripto_agent.selo.manifest import new_manifest
+from selo_v0.lint import lint_manifest, lint_manifests
+from selo_v0.manifest import new_manifest
 
 SCHEMA = {"properties": {"q": {"type": "string", "maxLength": 50}}}
 

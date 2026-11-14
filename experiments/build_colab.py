@@ -17,7 +17,7 @@ def bundle() -> Path:
     OUT.mkdir(exist_ok=True)
     target = OUT / "selo_bundle.zip"
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
-        for base in ("cripto_agent", "experiments", "tests"):
+        for base in ("selo_v0", "experiments", "tests"):
             for path in sorted((ROOT / base).rglob("*")):
                 if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":
                     z.write(path, path.relative_to(ROOT))
@@ -50,7 +50,7 @@ Ordem: 1) GPU e codigo -> 2) instalar -> 3) configurar -> 4) teste rapido -> 5) 
 !nvidia-smi --query-gpu=name,memory.total --format=csv
 import os, zipfile
 from google.colab import files
-if not os.path.exists('/content/work/cripto_agent'):
+if not os.path.exists('/content/work/selo_v0'):
     print('Envie colab/selo_bundle.zip (gerado no seu PC por experiments/build_colab.py)')
     up = files.upload()
     name = next(iter(up))
@@ -161,17 +161,17 @@ Upload `selo_bundle.zip` when asked (cell 1).
     code("""
 import os, zipfile
 from google.colab import files
-if not os.path.exists('/content/work/cripto_agent'):
+if not os.path.exists('/content/work/selo_v0'):
     up = files.upload()
     os.makedirs('/content/work', exist_ok=True)
     zipfile.ZipFile(next(iter(up))).extractall('/content/work')
 %cd /content/work
 !pip -q install "cryptography>=46"
 """),
-    code("!python -m cripto_agent demo"),
+    code("!python -m selo_v0 demo"),
     code("!python experiments/protocol_attacks.py --out results/protocol_attacks.json"),
-    code("!python -m cripto_agent lint --mcp python tests/fake_mcp_server.py"),
-    code("!python -m cripto_agent bench"),
+    code("!python -m selo_v0 lint --mcp python tests/v0/fake_mcp_server.py"),
+    code("!python -m selo_v0 bench"),
     code("!python -m unittest discover -s tests -p 'test_selo_*.py' 2>&1 | tail -4"),
 ]
 
