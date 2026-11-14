@@ -512,7 +512,16 @@ class Sidecar:
     def call_envelope(
         self, info: CardInfo, trust: PeerTrust, rpc: Dict[str, Any]
     ) -> Dict[str, Any]:
-        body = self.send_envelope(info, trust, {"rpc": rpc})
+        try:
+            body = self.send_envelope(info, trust, {"rpc": rpc})
+        except SeloError as e:
+            if e.code != "wrong_recipient":
+                raise
+            # o par girou a chave e a janela passou: busca o Card novo e tenta uma vez
+            info, trust = self.peers.get(
+                info.base_url, expected_id=info.agent_id, refresh=True
+            )
+            body = self.send_envelope(info, trust, {"rpc": rpc})
         resp = body.get("rpc")
         if not isinstance(resp, dict):
             raise SeloError("bad_response", "resposta sem rpc")

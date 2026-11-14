@@ -341,7 +341,9 @@ class HttpServer:
         self._thread: Optional[threading.Thread] = None
 
     def start(self) -> "HttpServer":
-        self._thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self._thread = threading.Thread(
+            target=self.httpd.serve_forever, args=(0.05,), daemon=True
+        )
         self._thread.start()
         return self
 
