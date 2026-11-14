@@ -57,6 +57,7 @@ class Proc:
         env: Optional[Dict[str, str]] = None,
         ready_timeout: float = 30.0,
         cwd: Optional[Path] = None,
+        prefix: Optional[List[str]] = None,
     ) -> None:
         full_env = dict(os.environ)
         full_env["PYTHONPATH"] = os.pathsep.join(
@@ -67,7 +68,7 @@ class Proc:
         full_env.update(env or {})
         self.args = args
         self.p = subprocess.Popen(
-            [PYTHON, *args],
+            [*(prefix or []), PYTHON, *args],
             cwd=str(cwd or ROOT),
             env=full_env,
             stdout=subprocess.PIPE,

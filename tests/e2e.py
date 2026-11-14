@@ -11,12 +11,22 @@ import json
 import os
 import shutil
 import socket
+import sys
 import tempfile
 import uuid
 from typing import Any, Dict, List, Optional
 
 from selo.local import LocalClient
 from tests.harness import Proc, TapProxy
+
+
+# Cofre real do sistema onde existe (DPAPI no Windows, Keychain no macOS, Secret Service com
+# secret-tool); senao, o cofre em arquivo com senha de teste.
+if sys.platform in ("win32", "darwin") or shutil.which("secret-tool"):
+    KEYSTORE = "auto"
+else:
+    KEYSTORE = "file"
+    os.environ.setdefault("SELO_KEY_PASSWORD", "senha-de-teste")
 
 
 def free_port() -> int:
@@ -75,7 +85,7 @@ class Node:
             "agent": {
                 "url": self.agent.info["url"] if self.agent else "http://127.0.0.1:9/"
             },
-            "keystore": {"backend": "auto"},
+            "keystore": {"backend": KEYSTORE},
         }
         if self.proxy:
             conf["public"]["url"] = self.proxy.url

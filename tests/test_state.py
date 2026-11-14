@@ -125,6 +125,7 @@ class FileKeyStoreTest(unittest.TestCase):
 
     def test_sidecar_with_file_backend(self):
         tmp = tempfile.mkdtemp(prefix="selo-filesc-")
+        previous = os.environ.get("SELO_KEY_PASSWORD")
         os.environ["SELO_KEY_PASSWORD"] = "senha-do-teste"
         try:
             cfg = {
@@ -143,7 +144,10 @@ class FileKeyStoreTest(unittest.TestCase):
             self.assertEqual(sc2.identity.agent_id, agent_id)
             sc2.store.close()
         finally:
-            del os.environ["SELO_KEY_PASSWORD"]
+            if previous is None:
+                del os.environ["SELO_KEY_PASSWORD"]
+            else:
+                os.environ["SELO_KEY_PASSWORD"] = previous
 
     def test_unknown_backend(self):
         with self.assertRaises(SeloError):

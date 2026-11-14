@@ -267,10 +267,21 @@ class Organization:
         port: int = 0,
         ssl_context: Any = None,
         clock: Any = time.time,
+        ttl: int = REVOCATIONS_DEFAULT,
+        reload_from: Optional[str] = None,
     ) -> HttpServer:
+        """Serve /revocations e /descriptor. Com `reload_from`, rele o estado (revogacoes
+        feitas pela CLI) a cada requisicao."""
+
         def handle(req: Request) -> Response:
+            if reload_from:
+                with open(
+                    os.path.join(reload_from, "org.json"), encoding="utf-8"
+                ) as fh:
+                    st = json.load(fh)
+                self.revoked, self.seq = st["revoked"], st["seq"]
             if req.method == "GET" and req.path == "/revocations":
-                return Response(200, self.revocation_list(clock()))
+                return Response(200, self.revocation_list(clock(), ttl))
             if req.method == "GET" and req.path == "/descriptor":
                 return Response(200, self.descriptor(clock()))
             return Response(404, {"error": "not_found"})
@@ -468,6 +479,7 @@ def add_cli(sub: Any) -> None:
             q.add_argument("--port", type=int, default=0)
             q.add_argument("--tls-cert")
             q.add_argument("--tls-key")
+            q.add_argument("--ttl", type=int, default=REVOCATIONS_DEFAULT)
         if name in ("attest", "revoke"):
             q.add_argument("--agent-id", required=True)
         if name == "attest":
@@ -527,7 +539,7 @@ def run_cli(a: Any) -> int:
 
         if not is_loopback_host(a.host) and ctx is None:
             raise SeloError("tls_required", f"recusado: {a.host} sem TLS")
-        srv = org.serve(a.host, a.port, ctx)
+        srv = org.serve(a.host, a.port, ctx, ttl=a.ttl, reload_from=a.dir)
         print(
             "READY "
             + json.dumps(
