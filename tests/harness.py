@@ -164,6 +164,7 @@ class TapProxy:
         self.exchanges: List[Exchange] = []
         self._lock = threading.Lock()
         self._mutators: List[Callable[[Exchange], Optional[bytes]]] = []
+        self._sse_mutators: List[Callable[[int, bytes], List[bytes]]] = []
         proxy = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -222,16 +223,44 @@ class TapProxy:
             handler.end_headers()
             handler.close_connection = True
             chunks = []
-            while True:
-                chunk = resp.read1(65536)
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                try:
-                    handler.wfile.write(chunk)
-                    handler.wfile.flush()
-                except OSError:
-                    break
+            with self._lock:
+                sse_mut = self._sse_mutators.pop(0) if self._sse_mutators else None
+            if sse_mut is None:
+                while True:
+                    try:
+                        chunk = resp.read1(65536)
+                    except OSError:
+                        break
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    try:
+                        handler.wfile.write(chunk)
+                        handler.wfile.flush()
+                    except OSError:
+                        break
+            else:
+                # repassa evento a evento, aplicando o mutador (indice, evento) -> [eventos]
+                buf, idx = b"", 0
+                while True:
+                    try:
+                        chunk = resp.read1(65536)
+                    except OSError:
+                        break
+                    if not chunk:
+                        break
+                    buf += chunk
+                    while b"\n\n" in buf:
+                        event, buf = buf.split(b"\n\n", 1)
+                        out = sse_mut(idx, event + b"\n\n")
+                        idx += 1
+                        for o in out:
+                            chunks.append(o)
+                            try:
+                                handler.wfile.write(o)
+                                handler.wfile.flush()
+                            except OSError:
+                                pass
             ex.response = b"".join(chunks)
         else:
             data = resp.read()
@@ -258,6 +287,13 @@ class TapProxy:
             return bytes(b)
 
         self._mutators.append(mutate)
+
+    def mutate_next_stream(self, fn: Callable[[int, bytes], List[bytes]]) -> None:
+        """Aplica `fn(indice, evento)` a cada evento SSE da proxima resposta em streaming.
+
+        `fn` devolve a lista de eventos a repassar: [] descarta, [e, e] duplica, e um evento
+        guardado e devolvido depois reordena."""
+        self._sse_mutators.append(fn)
 
     def drop_next(self) -> None:
         self._mutators.append(lambda ex: None)
