@@ -21,7 +21,11 @@ DEFAULT_VALIDITY = 24 * 3600
 MAX_LIFETIME = 7 * 24 * 3600
 DEFAULT_MAX_CARD_AGE = 24 * 3600
 WELL_KNOWN = "/.well-known/agent-card.json"
-ENDPOINTS = {"envelope": "/selo/v1/envelope", "session": "/selo/v1/session", "push": "/selo/v1/push"}
+ENDPOINTS = {
+    "envelope": "/selo/v1/envelope",
+    "session": "/selo/v1/session",
+    "push": "/selo/v1/push",
+}
 
 
 def normalize_base(url: str) -> str:
@@ -33,36 +37,67 @@ def _signing_input(protected: str, card: Dict[str, Any]) -> bytes:
     return (protected + "." + b64u(jcs.canonicalize(body))).encode("ascii")
 
 
-def build_card(identity: Identity, base_url: str, *, name: str, description: str = "",
-               skills: Optional[List[Dict[str, Any]]] = None,
-               attestations: Optional[List[Dict[str, Any]]] = None,
-               iat: int, validity: int = DEFAULT_VALIDITY, version: str = "1.0.0") -> Dict[str, Any]:
+def build_card(
+    identity: Identity,
+    base_url: str,
+    *,
+    name: str,
+    description: str = "",
+    skills: Optional[List[Dict[str, Any]]] = None,
+    attestations: Optional[List[Dict[str, Any]]] = None,
+    iat: int,
+    validity: int = DEFAULT_VALIDITY,
+    version: str = "1.0.0",
+) -> Dict[str, Any]:
     if not 0 < validity <= MAX_LIFETIME:
         raise SeloError("bad_validity")
     base = normalize_base(base_url)
     params = {
-        "v": PROTOCOL, "suite": SUITE, "agent_id": identity.agent_id, "kel": identity.kel,
-        "iat": int(iat), "exp": int(iat) + validity, "attestations": list(attestations or []),
+        "v": PROTOCOL,
+        "suite": SUITE,
+        "agent_id": identity.agent_id,
+        "kel": identity.kel,
+        "iat": int(iat),
+        "exp": int(iat) + validity,
+        "attestations": list(attestations or []),
         "endpoints": dict(ENDPOINTS),
     }
     card: Dict[str, Any] = {
         "name": name,
         "description": description or f"Agente SELO {name}",
         "version": version,
-        "supportedInterfaces": [{"url": base, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}],
+        "supportedInterfaces": [
+            {"url": base, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+        ],
         "capabilities": {
             "streaming": True,
             "pushNotifications": True,
-            "extensions": [{"uri": EXTENSION_URI, "required": True,
-                            "description": "SELO: A2A cifrado de ponta a ponta. Requisicoes em claro sao recusadas.",
-                            "params": params}],
+            "extensions": [
+                {
+                    "uri": EXTENSION_URI,
+                    "required": True,
+                    "description": "SELO: A2A cifrado de ponta a ponta. Requisicoes em claro sao recusadas.",
+                    "params": params,
+                }
+            ],
         },
         "defaultInputModes": ["text/plain", "application/json"],
         "defaultOutputModes": ["text/plain", "application/json"],
-        "skills": skills or [{"id": "default", "name": name, "description": description or name,
-                              "tags": ["selo"]}],
+        "skills": skills
+        or [
+            {
+                "id": "default",
+                "name": name,
+                "description": description or name,
+                "tags": ["selo"],
+            }
+        ],
     }
-    header = {"alg": "EdDSA", "kid": f"{identity.agent_id}#{identity.seq}", "typ": "JOSE"}
+    header = {
+        "alg": "EdDSA",
+        "kid": f"{identity.agent_id}#{identity.seq}",
+        "typ": "JOSE",
+    }
     protected = b64u(jcs.canonicalize(header))
     sig = identity.sig_key.sign(_signing_input(protected, card))
     card["signatures"] = [{"protected": protected, "signature": b64u(sig)}]
@@ -101,8 +136,13 @@ def selo_params(card: Any) -> Dict[str, Any]:
     raise SeloError("not_selo", "Card sem a extensao SELO")
 
 
-def verify_card(card: Any, *, now: float, max_card_age: int = DEFAULT_MAX_CARD_AGE,
-                expected_id: Optional[str] = None) -> CardInfo:
+def verify_card(
+    card: Any,
+    *,
+    now: float,
+    max_card_age: int = DEFAULT_MAX_CARD_AGE,
+    expected_id: Optional[str] = None,
+) -> CardInfo:
     if not isinstance(card, dict):
         raise SeloError("bad_card")
     p = selo_params(card)
@@ -121,8 +161,12 @@ def verify_card(card: Any, *, now: float, max_card_age: int = DEFAULT_MAX_CARD_A
     iat, exp = p.get("iat"), p.get("exp")
     if type(iat) is not int or type(exp) is not int:
         raise SeloError("bad_card", "iat/exp")
-    if not (iat <= now + CLOCK_SKEW and now < exp and exp - iat <= MAX_LIFETIME
-            and now - iat <= max_card_age):
+    if not (
+        iat <= now + CLOCK_SKEW
+        and now < exp
+        and exp - iat <= MAX_LIFETIME
+        and now - iat <= max_card_age
+    ):
         raise SeloError("card_stale", f"iat={iat} exp={exp} now={int(now)}")
     sigs = card.get("signatures")
     if not isinstance(sigs, list) or len(sigs) != 1 or not isinstance(sigs[0], dict):
@@ -134,8 +178,11 @@ def verify_card(card: Any, *, now: float, max_card_age: int = DEFAULT_MAX_CARD_A
         raise SeloError("bad_signature", "cabecalho JWS") from None
     if header != {"alg": "EdDSA", "kid": f"{st.agent_id}#{st.seq}", "typ": "JOSE"}:
         raise SeloError("bad_signature", "cabecalho JWS inesperado")
-    if not ed25519_verify(st.current.sig_pub, unb64u(sig.get("signature", "")),
-                          _signing_input(sig["protected"], card)):
+    if not ed25519_verify(
+        st.current.sig_pub,
+        unb64u(sig.get("signature", "")),
+        _signing_input(sig["protected"], card),
+    ):
         raise SeloError("bad_signature", "assinatura do Card")
     try:
         base = normalize_base(card["supportedInterfaces"][0]["url"])
@@ -149,6 +196,7 @@ def verify_card(card: Any, *, now: float, max_card_age: int = DEFAULT_MAX_CARD_A
 
 def jcs_load(raw: bytes) -> Any:
     import json
+
     return json.loads(raw.decode("utf-8"))
 
 
@@ -158,7 +206,9 @@ def local_view(card: Dict[str, Any], local_url: str) -> Dict[str, Any]:
     A assinatura original deixa de valer depois da troca, entao e removida; o sidecar marca
     `params.verified_by_sidecar`."""
     view = copy.deepcopy(card)
-    view["supportedInterfaces"] = [{"url": local_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}]
+    view["supportedInterfaces"] = [
+        {"url": local_url, "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+    ]
     view.pop("signatures", None)
     selo_params(view)["verified_by_sidecar"] = True
     return view

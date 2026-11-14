@@ -1,4 +1,5 @@
 """Processo de exemplo do harness: envia um byte a URL dada e anuncia o eco recebido."""
+
 import json
 import sys
 import urllib.request

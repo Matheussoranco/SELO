@@ -13,8 +13,15 @@ from typing import List, Optional, Tuple
 from cryptography.hazmat.primitives.asymmetric import x25519
 
 from ..errors import SeloError
-from .primitives import (aead_open, aead_seal, hmac_sha256, sha256, x25519_dh, x25519_generate,
-                         x25519_pub)
+from .primitives import (
+    aead_open,
+    aead_seal,
+    hmac_sha256,
+    sha256,
+    x25519_dh,
+    x25519_generate,
+    x25519_pub,
+)
 
 HASHLEN = 32
 DHLEN = 32
@@ -47,7 +54,7 @@ class CipherState:
         return self.k is not None
 
     def _nonce(self) -> bytes:
-        if self.n >= 2 ** 64 - 1:
+        if self.n >= 2**64 - 1:
             raise SeloError("noise_nonce_exhausted")
         return b"\x00" * 4 + self.n.to_bytes(8, "little")
 
@@ -68,8 +75,11 @@ class CipherState:
 
 class SymmetricState:
     def __init__(self, protocol_name: bytes) -> None:
-        self.h = protocol_name.ljust(HASHLEN, b"\x00") if len(protocol_name) <= HASHLEN \
+        self.h = (
+            protocol_name.ljust(HASHLEN, b"\x00")
+            if len(protocol_name) <= HASHLEN
             else sha256(protocol_name)
+        )
         self.ck = self.h
         self.cs = CipherState()
 
@@ -98,10 +108,16 @@ class SymmetricState:
 class HandshakeState:
     """Maquina de estados do handshake. `e` pode ser fixado (vetores de teste)."""
 
-    def __init__(self, pattern: str, initiator: bool, prologue: bytes = b"",
-                 s: Optional[x25519.X25519PrivateKey] = None,
-                 e: Optional[x25519.X25519PrivateKey] = None,
-                 rs: Optional[bytes] = None, re: Optional[bytes] = None) -> None:
+    def __init__(
+        self,
+        pattern: str,
+        initiator: bool,
+        prologue: bytes = b"",
+        s: Optional[x25519.X25519PrivateKey] = None,
+        e: Optional[x25519.X25519PrivateKey] = None,
+        rs: Optional[bytes] = None,
+        re: Optional[bytes] = None,
+    ) -> None:
         if pattern not in PATTERNS:
             raise SeloError("noise_pattern", pattern)
         self.pattern, self.initiator = pattern, initiator
@@ -146,9 +162,17 @@ class HandshakeState:
         if token == "ss":
             return x25519_dh(self.s, self.rs)
         if token == "es":
-            return x25519_dh(self.e, self.rs) if self.initiator else x25519_dh(self.s, self.re)
+            return (
+                x25519_dh(self.e, self.rs)
+                if self.initiator
+                else x25519_dh(self.s, self.re)
+            )
         if token == "se":
-            return x25519_dh(self.s, self.re) if self.initiator else x25519_dh(self.e, self.rs)
+            return (
+                x25519_dh(self.s, self.re)
+                if self.initiator
+                else x25519_dh(self.e, self.rs)
+            )
         raise SeloError("noise_pattern", token)
 
     def _maybe_split(self) -> None:
@@ -188,14 +212,14 @@ class HandshakeState:
             if t == "e":
                 if len(message) < pos + DHLEN:
                     raise SeloError("noise_short")
-                self.re = message[pos:pos + DHLEN]
+                self.re = message[pos : pos + DHLEN]
                 pos += DHLEN
                 self.ss.mix_hash(self.re)
             elif t == "s":
                 n = DHLEN + (16 if self.ss.cs.has_key() else 0)
                 if len(message) < pos + n:
                     raise SeloError("noise_short")
-                self.rs = self.ss.decrypt_and_hash(message[pos:pos + n])
+                self.rs = self.ss.decrypt_and_hash(message[pos : pos + n])
                 pos += n
             else:
                 self.ss.mix_key(self._dh(t))
@@ -215,4 +239,10 @@ def one_way(pattern: str) -> bool:
     return pattern in ONE_WAY
 
 
-__all__: List[str] = ["HandshakeState", "CipherState", "SymmetricState", "noise_hkdf", "one_way"]
+__all__: List[str] = [
+    "HandshakeState",
+    "CipherState",
+    "SymmetricState",
+    "noise_hkdf",
+    "one_way",
+]

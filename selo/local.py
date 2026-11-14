@@ -40,7 +40,9 @@ class LocalApi:
 
 def _private_file(path: str, data: bytes) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
+    fd = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600
+    )
     with os.fdopen(fd, "wb") as fh:
         fh.write(data)
 
@@ -54,7 +56,14 @@ def _frames_error(e: SeloError) -> Dict[str, Any]:
 
 
 class LocalServer:
-    def __init__(self, api: LocalApi, state_dir: str, name: str, mode: str = "auto", port: int = 0) -> None:
+    def __init__(
+        self,
+        api: LocalApi,
+        state_dir: str,
+        name: str,
+        mode: str = "auto",
+        port: int = 0,
+    ) -> None:
         self.api, self.state_dir, self.name = api, state_dir, name
         self.mode = default_mode() if mode == "auto" else mode
         self.port = port
@@ -78,7 +87,9 @@ class LocalServer:
                 self._listener = Listener(address, family="AF_PIPE", authkey=key)
             else:
                 if not hasattr(__import__("socket"), "AF_UNIX"):
-                    raise SeloError("bad_config", "socket Unix indisponivel nesta plataforma")
+                    raise SeloError(
+                        "bad_config", "socket Unix indisponivel nesta plataforma"
+                    )
                 os.chmod(self.run_dir, stat.S_IRWXU)
                 address = os.path.join(self.run_dir, "local.sock")
                 if os.path.exists(address):
@@ -93,11 +104,16 @@ class LocalServer:
             _private_file(token_file, token.encode())
             self._token = token
             self._http = HttpServer("127.0.0.1", self.port, self._handle_http).start()
-            self.info = {"mode": "http", "url": f"http://127.0.0.1:{self._http.port}",
-                         "token_file": token_file}
+            self.info = {
+                "mode": "http",
+                "url": f"http://127.0.0.1:{self._http.port}",
+                "token_file": token_file,
+            }
         else:
             raise SeloError("bad_config", f"modo local desconhecido: {self.mode}")
-        _private_file(os.path.join(self.run_dir, "local.json"), json.dumps(self.info).encode())
+        _private_file(
+            os.path.join(self.run_dir, "local.json"), json.dumps(self.info).encode()
+        )
         return self
 
     def stop(self) -> None:
@@ -115,11 +131,11 @@ class LocalServer:
         assert self._listener is not None
         while not self._stopped.is_set():
             try:
-                conn = self._listener.accept()           # faz o desafio HMAC
+                conn = self._listener.accept()  # faz o desafio HMAC
             except Exception:
                 if self._stopped.is_set():
                     return
-                continue                                  # cliente sem a chave: ignorado
+                continue  # cliente sem a chave: ignorado
             threading.Thread(target=self._serve_conn, args=(conn,), daemon=True).start()
 
     def _serve_conn(self, conn: Any) -> None:
@@ -135,21 +151,33 @@ class LocalServer:
                         raise SeloError("bad_request", "quadro nao e objeto")
                     op = frame.get("op")
                     if op == "call":
-                        conn.send_bytes(json.dumps({"rpc": self.api.call(frame["peer"], frame["rpc"])}).encode())
+                        conn.send_bytes(
+                            json.dumps(
+                                {"rpc": self.api.call(frame["peer"], frame["rpc"])}
+                            ).encode()
+                        )
                     elif op == "stream":
                         for ev in self.api.stream(frame["peer"], frame["rpc"]):
                             conn.send_bytes(json.dumps({"event": ev}).encode())
                         conn.send_bytes(b'{"end": true}')
                     elif op == "card":
-                        conn.send_bytes(json.dumps({"card": self.api.peer_card(frame["peer"], None)}).encode())
+                        conn.send_bytes(
+                            json.dumps(
+                                {"card": self.api.peer_card(frame["peer"], None)}
+                            ).encode()
+                        )
                     elif op == "whoami":
-                        conn.send_bytes(json.dumps({"whoami": self.api.whoami()}).encode())
+                        conn.send_bytes(
+                            json.dumps({"whoami": self.api.whoami()}).encode()
+                        )
                     else:
                         raise SeloError("bad_request", f"op desconhecida: {op!r}")
                 except SeloError as e:
                     conn.send_bytes(json.dumps(_frames_error(e)).encode())
                 except (KeyError, ValueError, TypeError):
-                    conn.send_bytes(json.dumps(_frames_error(SeloError("bad_request"))).encode())
+                    conn.send_bytes(
+                        json.dumps(_frames_error(SeloError("bad_request"))).encode()
+                    )
         finally:
             try:
                 conn.close()
@@ -180,13 +208,23 @@ class LocalServer:
                 try:
                     rpc = req.json()
                 except SeloError:
-                    return Response(200, {"jsonrpc": "2.0", "id": None,
-                                          "error": {"code": -32700, "message": "parse error"}})
+                    return Response(
+                        200,
+                        {
+                            "jsonrpc": "2.0",
+                            "id": None,
+                            "error": {"code": -32700, "message": "parse error"},
+                        },
+                    )
                 from .channel import is_streaming
+
                 if isinstance(rpc, dict) and is_streaming(str(rpc.get("method"))):
                     events = self.api.stream(peer, rpc)
-                    return Response(200, content_type="text/event-stream",
-                                    stream=(sse_event(json.dumps(ev)) for ev in events))
+                    return Response(
+                        200,
+                        content_type="text/event-stream",
+                        stream=(sse_event(json.dumps(ev)) for ev in events),
+                    )
                 return Response(200, self.api.call(peer, rpc))
         return Response(404, {"error": "not_found"})
 
@@ -194,9 +232,13 @@ class LocalServer:
 class LocalClient:
     """Cliente do canal local, usado pelo agente (ou por testes)."""
 
-    def __init__(self, state_dir: Optional[str] = None, info: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, state_dir: Optional[str] = None, info: Optional[Dict[str, Any]] = None
+    ) -> None:
         if info is None:
-            with open(os.path.join(state_dir or ".", "run", "local.json"), encoding="utf-8") as fh:
+            with open(
+                os.path.join(state_dir or ".", "run", "local.json"), encoding="utf-8"
+            ) as fh:
                 info = json.load(fh)
         self.info = info
         self.mode = info["mode"]
@@ -229,17 +271,27 @@ class LocalClient:
 
     def call(self, peer: str, rpc: Dict[str, Any]) -> Dict[str, Any]:
         if self.mode == "http":
-            status, body = self._http.json("POST", f"{self.info['url']}/peers/{urllib.parse.quote(peer, safe='')}/",
-                                           rpc, {"Authorization": f"Bearer {self._token}"})
+            status, body = self._http.json(
+                "POST",
+                f"{self.info['url']}/peers/{urllib.parse.quote(peer, safe='')}/",
+                rpc,
+                {"Authorization": f"Bearer {self._token}"},
+            )
             if status != 200:
                 raise SeloError((body or {}).get("error", "local_error"))
             return body
-        return self._check(self._roundtrip({"op": "call", "peer": peer, "rpc": rpc}))["rpc"]
+        return self._check(self._roundtrip({"op": "call", "peer": peer, "rpc": rpc}))[
+            "rpc"
+        ]
 
     def stream(self, peer: str, rpc: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
         if self.mode == "http":
-            r = self._http.stream("POST", f"{self.info['url']}/peers/{urllib.parse.quote(peer, safe='')}/",
-                                  rpc, {"Authorization": f"Bearer {self._token}"})
+            r = self._http.stream(
+                "POST",
+                f"{self.info['url']}/peers/{urllib.parse.quote(peer, safe='')}/",
+                rpc,
+                {"Authorization": f"Bearer {self._token}"},
+            )
             if not r.is_sse:
                 body = json.loads(r.read_all() or b"null")
                 yield body
@@ -249,7 +301,9 @@ class LocalClient:
             return
         conn = self._conn()
         try:
-            conn.send_bytes(json.dumps({"op": "stream", "peer": peer, "rpc": rpc}).encode())
+            conn.send_bytes(
+                json.dumps({"op": "stream", "peer": peer, "rpc": rpc}).encode()
+            )
             while True:
                 reply = self._check(json.loads(conn.recv_bytes(MAX_FRAME)))
                 if reply.get("end"):
@@ -261,8 +315,11 @@ class LocalClient:
     def card(self, peer: str) -> Dict[str, Any]:
         if self.mode == "http":
             status, body = self._http.json(
-                "GET", f"{self.info['url']}/peers/{urllib.parse.quote(peer, safe='')}{WELL_KNOWN}",
-                None, {"Authorization": f"Bearer {self._token}"})
+                "GET",
+                f"{self.info['url']}/peers/{urllib.parse.quote(peer, safe='')}{WELL_KNOWN}",
+                None,
+                {"Authorization": f"Bearer {self._token}"},
+            )
             if status != 200:
                 raise SeloError((body or {}).get("error", "local_error"))
             return body
@@ -270,8 +327,12 @@ class LocalClient:
 
     def whoami(self) -> Dict[str, Any]:
         if self.mode == "http":
-            return self._http.json("GET", f"{self.info['url']}/whoami", None,
-                                   {"Authorization": f"Bearer {self._token}"})[1]
+            return self._http.json(
+                "GET",
+                f"{self.info['url']}/whoami",
+                None,
+                {"Authorization": f"Bearer {self._token}"},
+            )[1]
         return self._check(self._roundtrip({"op": "whoami"}))["whoami"]
 
 

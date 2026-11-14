@@ -1,9 +1,9 @@
 """Envelope de um tiro (especificacao, secao 8): HPKE para o destinatario + assinatura Ed25519.
 
-    (enc, ctx) = HPKE.SetupBaseS(agree_pub do destinatario, info="selo/1/envelope")
-    ct         = ctx.Seal(aad=JCS(h), pt=JCS(corpo))
-    sig        = Ed25519(remetente, "selo/1/envelope" 0x00 || SHA256(JCS(h)) || enc || SHA256(ct)
-                                    || SHA256(JCS(escrow) ou ""))
+(enc, ctx) = HPKE.SetupBaseS(agree_pub do destinatario, info="selo/1/envelope")
+ct         = ctx.Seal(aad=JCS(h), pt=JCS(corpo))
+sig        = Ed25519(remetente, "selo/1/envelope" 0x00 || SHA256(JCS(h)) || enc || SHA256(ct)
+                                || SHA256(JCS(escrow) ou ""))
 """
 
 from __future__ import annotations
@@ -27,8 +27,18 @@ MAX_BODY = 256 * 1024
 DEFAULT_TTL = 60
 MAX_TTL = 300
 TYPES = ("req", "resp", "push")
-BASE_FIELDS = {"v", "t", "sender", "sender_card", "sender_seq", "recipient", "recipient_seq",
-               "msg", "iat", "exp"}
+BASE_FIELDS = {
+    "v",
+    "t",
+    "sender",
+    "sender_card",
+    "sender_seq",
+    "recipient",
+    "recipient_seq",
+    "msg",
+    "iat",
+    "exp",
+}
 
 
 @dataclass
@@ -39,9 +49,18 @@ class Opened:
     digest: str
 
 
-def seal(*, sender: Identity, sender_card_url: str, recipient: CardInfo, body: Dict[str, Any],
-         t: str, now: float, ttl: int = DEFAULT_TTL, re: Optional[str] = None,
-         escrow: Optional[EscrowTarget] = None) -> Dict[str, Any]:
+def seal(
+    *,
+    sender: Identity,
+    sender_card_url: str,
+    recipient: CardInfo,
+    body: Dict[str, Any],
+    t: str,
+    now: float,
+    ttl: int = DEFAULT_TTL,
+    re: Optional[str] = None,
+    escrow: Optional[EscrowTarget] = None,
+) -> Dict[str, Any]:
     if t not in TYPES or (t == "resp") != (re is not None):
         raise SeloError("bad_envelope", "tipo/re")
     if not 0 < ttl <= MAX_TTL:
@@ -51,9 +70,16 @@ def seal(*, sender: Identity, sender_card_url: str, recipient: CardInfo, body: D
         raise SeloError("body_too_large")
     iat = int(now)
     h: Dict[str, Any] = {
-        "v": PROTOCOL, "t": t, "sender": sender.agent_id, "sender_card": sender_card_url,
-        "sender_seq": sender.seq, "recipient": recipient.agent_id,
-        "recipient_seq": recipient.kel.seq, "msg": b64u(os.urandom(16)), "iat": iat, "exp": iat + ttl,
+        "v": PROTOCOL,
+        "t": t,
+        "sender": sender.agent_id,
+        "sender_card": sender_card_url,
+        "sender_seq": sender.seq,
+        "recipient": recipient.agent_id,
+        "recipient_seq": recipient.kel.seq,
+        "msg": b64u(os.urandom(16)),
+        "iat": iat,
+        "exp": iat + ttl,
     }
     if re is not None:
         h["re"] = re
@@ -61,7 +87,9 @@ def seal(*, sender: Identity, sender_card_url: str, recipient: CardInfo, body: D
     enc, ctx = hpke.setup_base_s(recipient.agree_pub, INFO)
     capsule = make_capsule(escrow, aad, ctx.key + ctx.base_nonce) if escrow else None
     ct = ctx.seal(aad, plaintext)
-    sig = sender.sig_key.sign(SIG_DOMAIN + sha256(aad) + enc + sha256(ct) + capsule_digest(capsule))
+    sig = sender.sig_key.sign(
+        SIG_DOMAIN + sha256(aad) + enc + sha256(ct) + capsule_digest(capsule)
+    )
     env: Dict[str, Any] = {"h": h, "enc": b64u(enc), "ct": b64u(ct), "sig": b64u(sig)}
     if capsule is not None:
         env["escrow"] = capsule
@@ -70,7 +98,9 @@ def seal(*, sender: Identity, sender_card_url: str, recipient: CardInfo, body: D
 
 def peek(env: Any) -> Dict[str, Any]:
     """Valida a forma e devolve o cabecalho, ainda NAO autenticado."""
-    if not isinstance(env, dict) or not ({"h", "enc", "ct", "sig"} <= set(env) <= {"h", "enc", "ct", "sig", "escrow"}):
+    if not isinstance(env, dict) or not (
+        {"h", "enc", "ct", "sig"} <= set(env) <= {"h", "enc", "ct", "sig", "escrow"}
+    ):
         raise SeloError("bad_envelope", "forma")
     h = env["h"]
     if not isinstance(h, dict):
@@ -82,7 +112,9 @@ def peek(env: Any) -> Dict[str, Any]:
     for k in ("sender_seq", "recipient_seq", "iat", "exp"):
         if type(h[k]) is not int:
             raise SeloError("bad_envelope", k)
-    for k in ("sender", "sender_card", "recipient", "msg") + (("re",) if t == "resp" else ()):
+    for k in ("sender", "sender_card", "recipient", "msg") + (
+        ("re",) if t == "resp" else ()
+    ):
         if not isinstance(h[k], str) or not h[k]:
             raise SeloError("bad_envelope", k)
     for k in ("enc", "ct", "sig"):
@@ -92,15 +124,26 @@ def peek(env: Any) -> Dict[str, Any]:
 
 
 def check_lifetime(h: Dict[str, Any], now: float) -> None:
-    if not (abs(now - h["iat"]) <= CLOCK_SKEW and now < h["exp"] and 0 < h["exp"] - h["iat"] <= MAX_TTL):
-        raise SeloError("invalid_lifetime", f"iat={h['iat']} exp={h['exp']} now={int(now)}")
+    if not (
+        abs(now - h["iat"]) <= CLOCK_SKEW
+        and now < h["exp"]
+        and 0 < h["exp"] - h["iat"] <= MAX_TTL
+    ):
+        raise SeloError(
+            "invalid_lifetime", f"iat={h['iat']} exp={h['exp']} now={int(now)}"
+        )
 
 
-def open_envelope(env: Any, *, me: Identity, now: float,
-                  resolve_sender: Callable[[Dict[str, Any]], CardInfo],
-                  replay: Callable[[str, str, int], None],
-                  escrow_org: Callable[[CardInfo], Optional[str]] = lambda _c: None,
-                  expect_type: Optional[str] = None) -> Opened:
+def open_envelope(
+    env: Any,
+    *,
+    me: Identity,
+    now: float,
+    resolve_sender: Callable[[Dict[str, Any]], CardInfo],
+    replay: Callable[[str, str, int], None],
+    escrow_org: Callable[[CardInfo], Optional[str]] = lambda _c: None,
+    expect_type: Optional[str] = None,
+) -> Opened:
     """Verifica e decifra na ordem da especificacao (8.3). Qualquer falha levanta SeloError.
 
     `resolve_sender(h)` busca, verifica e aplica a politica de confianca ao Card do remetente.
@@ -122,8 +165,11 @@ def open_envelope(env: Any, *, me: Identity, now: float,
     enc, ct = unb64u(env["enc"]), unb64u(env["ct"])
     if len(ct) > MAX_BODY:
         raise SeloError("body_too_large")
-    if not ed25519_verify(sender.kel.entry(h["sender_seq"]).sig_pub, unb64u(env["sig"]),
-                          SIG_DOMAIN + sha256(aad) + enc + sha256(ct) + capsule_digest(capsule)):
+    if not ed25519_verify(
+        sender.kel.entry(h["sender_seq"]).sig_pub,
+        unb64u(env["sig"]),
+        SIG_DOMAIN + sha256(aad) + enc + sha256(ct) + capsule_digest(capsule),
+    ):
         raise SeloError("bad_signature")
     replay(h["sender"], h["msg"], h["exp"])
     org = escrow_org(sender)

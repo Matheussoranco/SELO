@@ -104,6 +104,7 @@ def ed25519_priv(sk: ed25519.Ed25519PrivateKey) -> bytes:
 
 def ed25519_verify(pub: bytes, sig: bytes, data: bytes) -> bool:
     from cryptography.exceptions import InvalidSignature
+
     try:
         ed25519.Ed25519PublicKey.from_public_bytes(pub).verify(sig, data)
         return True

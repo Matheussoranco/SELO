@@ -15,13 +15,14 @@ from .identity import check_extends
 from .net import HttpClient
 from .store import Store
 
-REFRESH = 30          # segundos entre buscas do mesmo Card
+REFRESH = 30  # segundos entre buscas do mesmo Card
 
 
 @dataclass
 class PeerTrust:
     """Resultado da politica de confianca para um par aceito."""
-    org: Optional[str]          # organizacao confiavel que atesta o par, ou None
+
+    org: Optional[str]  # organizacao confiavel que atesta o par, ou None
 
 
 class TrustPolicy:
@@ -29,7 +30,7 @@ class TrustPolicy:
 
     def __init__(self, cfg: Dict[str, Any], orgs: Any = None) -> None:
         trust = cfg.get("trust") or {}
-        self.orgs = orgs                              # selo.org.OrgTrust ou None
+        self.orgs = orgs  # selo.org.OrgTrust ou None
         member = orgs is not None and orgs.own_org is not None
         allow = trust.get("allow_unattested")
         self.allow_unattested = (not member) if allow is None else bool(allow)
@@ -37,31 +38,48 @@ class TrustPolicy:
 
     def evaluate(self, info: CardInfo, now: float) -> PeerTrust:
         if self.orgs is not None:
-            org = self.orgs.attested_org(info, now)    # levanta se lista de revogacao vencida / revogado
+            org = self.orgs.attested_org(
+                info, now
+            )  # levanta se lista de revogacao vencida / revogado
             if org is not None:
                 return PeerTrust(org)
         if not self.allow_unattested:
-            raise SeloError("peer_untrusted", f"{info.agent_id} sem atestacao de organizacao confiavel")
+            raise SeloError(
+                "peer_untrusted",
+                f"{info.agent_id} sem atestacao de organizacao confiavel",
+            )
         if self.allowed_peers and info.agent_id not in self.allowed_peers:
             raise SeloError("peer_untrusted", f"{info.agent_id} fora de trust.peers")
         return PeerTrust(None)
 
 
 class PeerDirectory:
-    def __init__(self, store: Store, http: HttpClient, clock: Callable[[], float],
-                 policy: TrustPolicy, max_card_age: int) -> None:
+    def __init__(
+        self,
+        store: Store,
+        http: HttpClient,
+        clock: Callable[[], float],
+        policy: TrustPolicy,
+        max_card_age: int,
+    ) -> None:
         self.store, self.http, self.clock, self.policy = store, http, clock, policy
         self.max_card_age = max_card_age
         self._cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
         self._lock = threading.Lock()
 
-    def _verify(self, card: Dict[str, Any], url: str, expected_id: Optional[str]) -> CardInfo:
+    def _verify(
+        self, card: Dict[str, Any], url: str, expected_id: Optional[str]
+    ) -> CardInfo:
         now = self.clock()
-        info = verify_card(card, now=now, max_card_age=self.max_card_age, expected_id=expected_id)
+        info = verify_card(
+            card, now=now, max_card_age=self.max_card_age, expected_id=expected_id
+        )
         check_extends(self.store.get_pin(info.agent_id), info.kel, info.kel_raw)
         return info
 
-    def get(self, url: str, expected_id: Optional[str] = None, refresh: bool = False) -> Tuple[CardInfo, PeerTrust]:
+    def get(
+        self, url: str, expected_id: Optional[str] = None, refresh: bool = False
+    ) -> Tuple[CardInfo, PeerTrust]:
         base = normalize_base(url)
         now = self.clock()
         with self._lock:
@@ -80,7 +98,7 @@ class PeerDirectory:
             except SeloError:
                 if not cached:
                     raise
-                card = cached[0]                       # ainda pode valer; verify_card decide
+                card = cached[0]  # ainda pode valer; verify_card decide
         info = self._verify(card, base, expected_id)
         self.store.set_pin(info.agent_id, *info.pin())
         trust = self.policy.evaluate(info, now)

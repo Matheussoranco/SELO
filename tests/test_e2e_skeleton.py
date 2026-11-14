@@ -14,8 +14,12 @@ from tests.e2e import World, send_message
 
 
 def _post(url, body):
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                 headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             return r.status, json.loads(r.read())
@@ -43,8 +47,8 @@ class SkeletonTest(unittest.TestCase):
         self.assertEqual(task["artifacts"][0]["parts"][0]["text"], f"eco: {secret}")
         got = [r for r in self.b.received() if r["text"] == secret]
         self.assertEqual(len(got), 1)
-        self.assertEqual(got[0]["sender"], self.a.agent_id)      # remetente autenticado
-        self.assertEqual(got[0]["org"], "")                        # sem organizacao
+        self.assertEqual(got[0]["sender"], self.a.agent_id)  # remetente autenticado
+        self.assertEqual(got[0]["org"], "")  # sem organizacao
         self.assertTrue(self.b.proxy.find("/selo/v1/envelope"))
         self.assertFalse(self.b.proxy.plaintext_seen(secret))
         self.assertFalse(self.b.proxy.plaintext_seen("eco: "))
@@ -53,6 +57,7 @@ class SkeletonTest(unittest.TestCase):
         with urllib.request.urlopen(self.b.url + WELL_KNOWN, timeout=10) as r:
             card = json.loads(r.read())
         import time
+
         info = verify_card(card, now=time.time())
         self.assertEqual(info.agent_id, self.b.agent_id)
         ext = card["capabilities"]["extensions"][0]
@@ -77,7 +82,7 @@ class SkeletonTest(unittest.TestCase):
         for name in os.listdir(key_dir):
             with open(os.path.join(key_dir, name), "rb") as fh:
                 raw = fh.read()
-            self.assertNotIn(b'"sig"', raw)                       # blob protegido, nao JSON em claro
+            self.assertNotIn(b'"sig"', raw)  # blob protegido, nao JSON em claro
             self.assertNotIn(b"PRIVATE KEY", raw)
 
     def test_local_channel_requires_the_key(self):
@@ -101,7 +106,9 @@ class SkeletonTest(unittest.TestCase):
         self.assertNotIn("adulterada", [r["text"] for r in self.b.received()])
 
         env = json.loads(ex.body)
-        status, body = _post(self.a.url + "/selo/v1/envelope", env)    # envelope de B entregue a A
+        status, body = _post(
+            self.a.url + "/selo/v1/envelope", env
+        )  # envelope de B entregue a A
         self.assertEqual((status, body["error"]), (400, "wrong_recipient"))
 
     def test_plaintext_a2a_is_refused(self):
@@ -112,7 +119,9 @@ class SkeletonTest(unittest.TestCase):
 
     def test_peer_card_through_local_channel(self):
         card = self.a.client.card(self.b.url)
-        self.assertEqual(card["capabilities"]["extensions"][0]["params"]["agent_id"], self.b.agent_id)
+        self.assertEqual(
+            card["capabilities"]["extensions"][0]["params"]["agent_id"], self.b.agent_id
+        )
 
 
 class LocalHttpModeTest(unittest.TestCase):
@@ -122,7 +131,9 @@ class LocalHttpModeTest(unittest.TestCase):
             b = w.node("dave")
             self.assertEqual(a.info["local"]["mode"], "http")
             resp = a.client.call(b.url, send_message("via http local"))
-            self.assertEqual(resp["result"]["task"]["status"]["state"], "TASK_STATE_COMPLETED")
+            self.assertEqual(
+                resp["result"]["task"]["status"]["state"], "TASK_STATE_COMPLETED"
+            )
             url = a.info["local"]["url"] + "/whoami"
             with self.assertRaises(urllib.error.HTTPError) as cm:
                 urllib.request.urlopen(url, timeout=10)

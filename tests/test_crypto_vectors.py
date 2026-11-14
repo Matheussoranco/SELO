@@ -34,21 +34,28 @@ class JcsVectors(unittest.TestCase):
         def parse_int(s):
             v = int(s)
             return v if abs(v) <= jcs.MAX_SAFE_INT else float(s)
+
         for name, case in _load("jcs_cyberphone_testdata.json")["cases"].items():
             with self.subTest(case=name):
                 value = json.loads(case["input"], parse_int=parse_int)
-                self.assertEqual(jcs.canonicalize(value).decode("utf-8"), case["output"].rstrip("\n"))
+                self.assertEqual(
+                    jcs.canonicalize(value).decode("utf-8"), case["output"].rstrip("\n")
+                )
 
     def test_rfc8785_section_3_2_2_example(self):
-        src = ('{"numbers": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001],'
-               '"string": "\\u20ac$\\u000F\\u000aA\'\\u0042\\u0022\\u005c\\\\\\"\\/",'
-               '"literals": [null, true, false]}')
-        expected = ('{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],'
-                    '"string":"€$\\u000f\\nA\'B\\"\\\\\\\\\\"/"}')
+        src = (
+            '{"numbers": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001],'
+            '"string": "\\u20ac$\\u000F\\u000aA\'\\u0042\\u0022\\u005c\\\\\\"\\/",'
+            '"literals": [null, true, false]}'
+        )
+        expected = (
+            '{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],'
+            '"string":"€$\\u000f\\nA\'B\\"\\\\\\\\\\"/"}'
+        )
         self.assertEqual(jcs.canonicalize(json.loads(src)).decode("utf-8"), expected)
 
     def test_rejects_non_json_values(self):
-        for bad in (float("nan"), 2 ** 60, {1: "x"}, "\ud800", b"bytes"):
+        for bad in (float("nan"), 2**60, {1: "x"}, "\ud800", b"bytes"):
             with self.subTest(bad=repr(bad)), self.assertRaises(SeloError):
                 jcs.canonicalize(bad)
 
@@ -89,10 +96,14 @@ class HpkeVectors(unittest.TestCase):
         self.assertEqual(hpke.decap(enc, x25519_from_bytes(self.h["skRm"])), shared)
 
     def test_exports(self):
-        ctx = hpke.setup_base_r(self.h["enc"], x25519_from_bytes(self.h["skRm"]), self.h["info"])
+        ctx = hpke.setup_base_r(
+            self.h["enc"], x25519_from_bytes(self.h["skRm"]), self.h["info"]
+        )
         for e in self.v["exports"]:
-            self.assertEqual(ctx.export(bytes.fromhex(e["exporter_context"]), e["L"]),
-                             bytes.fromhex(e["exported_value"]))
+            self.assertEqual(
+                ctx.export(bytes.fromhex(e["exporter_context"]), e["L"]),
+                bytes.fromhex(e["exported_value"]),
+            )
 
     def test_wrong_inputs_fail(self):
         sk_r = x25519_from_bytes(self.h["skRm"])
@@ -101,10 +112,12 @@ class HpkeVectors(unittest.TestCase):
         tampered = bytearray(ct)
         tampered[0] ^= 1
         other = hpke.derive_keypair(b"outra chave")
-        for args in ((enc, sk_r, b"info", b"aad", bytes(tampered)),   # mensagem alterada
-                     (enc, other, b"info", b"aad", ct),                # chave errada
-                     (enc, sk_r, b"outro", b"aad", ct),                # contexto (info) errado
-                     (enc, sk_r, b"info", b"outro", ct)):              # aad errado
+        for args in (
+            (enc, sk_r, b"info", b"aad", bytes(tampered)),  # mensagem alterada
+            (enc, other, b"info", b"aad", ct),  # chave errada
+            (enc, sk_r, b"outro", b"aad", ct),  # contexto (info) errado
+            (enc, sk_r, b"info", b"outro", ct),
+        ):  # aad errado
             with self.assertRaises(SeloError):
                 hpke.open_base(*args)
 

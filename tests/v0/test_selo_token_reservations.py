@@ -16,18 +16,36 @@ class TokenReservations(unittest.TestCase):
         self.client = self.world.agents["assistant"]
         self.host = self.world.agents["erp"]
         self.cap = "erp.get_balance"
-        self.token = self.host.mint(self.cap, [{"holder": "assistant"}, {"max_uses": 1}])
+        self.token = self.host.mint(
+            self.cap, [{"holder": "assistant"}, {"max_uses": 1}]
+        )
 
     def call(self, token=None):
-        return self.client.call("erp", self.cap, {"account": "matriz"},
-                                token or self.token, Session(), self.world.send)
+        return self.client.call(
+            "erp",
+            self.cap,
+            {"account": "matriz"},
+            token or self.token,
+            Session(),
+            self.world.send,
+        )
 
     def reopen(self, path):
         old = self.host
-        host = Agent(agent_id=old.id, org=old.org, sig_sk=old.sig_sk, cert=old.cert,
-                     keys=old.keys, directory=old.directory, entry_provider=old.entry_provider,
-                     clock=old.clock, revoked=old.revoked, token_root=old.token_root,
-                     manifests=old.manifests, db=str(path))
+        host = Agent(
+            agent_id=old.id,
+            org=old.org,
+            sig_sk=old.sig_sk,
+            cert=old.cert,
+            keys=old.keys,
+            directory=old.directory,
+            entry_provider=old.entry_provider,
+            clock=old.clock,
+            revoked=old.revoked,
+            token_root=old.token_root,
+            manifests=old.manifests,
+            db=str(path),
+        )
         host.caps = old.caps.copy()
         old.close()
         self.host = self.world.agents["erp"] = host

@@ -51,17 +51,31 @@ class FakeClock:
 class Proc:
     """Processo filho que anuncia prontidao com ``READY <json>`` no stdout."""
 
-    def __init__(self, args: List[str], env: Optional[Dict[str, str]] = None,
-                 ready_timeout: float = 30.0, cwd: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        args: List[str],
+        env: Optional[Dict[str, str]] = None,
+        ready_timeout: float = 30.0,
+        cwd: Optional[Path] = None,
+    ) -> None:
         full_env = dict(os.environ)
         full_env["PYTHONPATH"] = os.pathsep.join(
-            [str(ROOT)] + ([full_env["PYTHONPATH"]] if full_env.get("PYTHONPATH") else []))
+            [str(ROOT)]
+            + ([full_env["PYTHONPATH"]] if full_env.get("PYTHONPATH") else [])
+        )
         full_env["PYTHONUNBUFFERED"] = "1"
         full_env.update(env or {})
         self.args = args
-        self.p = subprocess.Popen([PYTHON, *args], cwd=str(cwd or ROOT), env=full_env,
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                                  encoding="utf-8", errors="replace")
+        self.p = subprocess.Popen(
+            [PYTHON, *args],
+            cwd=str(cwd or ROOT),
+            env=full_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         self.out: List[str] = []
         self.err: List[str] = []
         self.info: Dict = {}
@@ -87,8 +101,10 @@ class Proc:
             if self.p.poll() is not None or time.time() > deadline:
                 time.sleep(0.2)
                 self.stop()
-                raise RuntimeError(f"processo nao ficou pronto: {args}\n"
-                                   f"stdout:\n{''.join(self.out)}\nstderr:\n{''.join(self.err)}")
+                raise RuntimeError(
+                    f"processo nao ficou pronto: {args}\n"
+                    f"stdout:\n{''.join(self.out)}\nstderr:\n{''.join(self.err)}"
+                )
 
     def alive(self) -> bool:
         return self.p.poll() is None
@@ -123,8 +139,17 @@ class Exchange:
     resp_headers: Dict[str, str] = field(default_factory=dict)
 
 
-_HOP = {"connection", "keep-alive", "transfer-encoding", "content-length", "host",
-        "proxy-connection", "te", "trailer", "upgrade"}
+_HOP = {
+    "connection",
+    "keep-alive",
+    "transfer-encoding",
+    "content-length",
+    "host",
+    "proxy-connection",
+    "te",
+    "trailer",
+    "upgrade",
+}
 
 
 class TapProxy:
@@ -133,7 +158,9 @@ class TapProxy:
     def __init__(self, target: str) -> None:
         self.target = urllib.parse.urlsplit(target)
         if self.target.scheme != "http":
-            raise ValueError("o TapProxy so intermedeia HTTP sem TLS (loopback de teste)")
+            raise ValueError(
+                "o TapProxy so intermedeia HTTP sem TLS (loopback de teste)"
+            )
         self.exchanges: List[Exchange] = []
         self._lock = threading.Lock()
         self._mutators: List[Callable[[Exchange], Optional[bytes]]] = []
@@ -154,7 +181,7 @@ class TapProxy:
                     mutator = proxy._mutators.pop(0) if proxy._mutators else None
                 if mutator is not None:
                     new_body = mutator(ex)
-                    if new_body is None:            # descartar: fecha a conexao sem resposta
+                    if new_body is None:  # descartar: fecha a conexao sem resposta
                         self.close_connection = True
                         ex.status = -1
                         return
@@ -168,8 +195,12 @@ class TapProxy:
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
-    def _forward(self, handler: BaseHTTPRequestHandler, ex: Exchange, body: bytes) -> None:
-        conn = http.client.HTTPConnection(self.target.hostname, self.target.port, timeout=60)
+    def _forward(
+        self, handler: BaseHTTPRequestHandler, ex: Exchange, body: bytes
+    ) -> None:
+        conn = http.client.HTTPConnection(
+            self.target.hostname, self.target.port, timeout=60
+        )
         headers = {k: v for k, v in ex.headers.items() if k.lower() not in _HOP}
         headers["Content-Length"] = str(len(body))
         headers["Host"] = f"{self.target.hostname}:{self.target.port}"
@@ -215,7 +246,8 @@ class TapProxy:
         """Inverte um bit de um byte do proximo corpo de requisicao (meio do corpo por padrao).
 
         O byte escolhido fica dentro de um valor JSON em base64 sempre que possivel, para que a
-        mensagem continue sendo JSON valido e a falha seja detectada pela criptografia."""
+        mensagem continue sendo JSON valido e a falha seja detectada pela criptografia.
+        """
 
         def mutate(ex: Exchange) -> bytes:
             b = bytearray(ex.body)
@@ -224,6 +256,7 @@ class TapProxy:
             i = position if position is not None else _b64_byte_index(b)
             b[i] = _flip_b64(b[i])
             return bytes(b)
+
         self._mutators.append(mutate)
 
     def drop_next(self) -> None:
@@ -231,10 +264,14 @@ class TapProxy:
 
     def replay(self, exchange: Exchange) -> Tuple[int, bytes]:
         """Reenvia ao alvo, sem passar pelos mutadores, uma requisicao gravada."""
-        conn = http.client.HTTPConnection(self.target.hostname, self.target.port, timeout=30)
+        conn = http.client.HTTPConnection(
+            self.target.hostname, self.target.port, timeout=30
+        )
         headers = {k: v for k, v in exchange.headers.items() if k.lower() not in _HOP}
         headers["Content-Length"] = str(len(exchange.body))
-        conn.request(exchange.method, exchange.path, body=exchange.body, headers=headers)
+        conn.request(
+            exchange.method, exchange.path, body=exchange.body, headers=headers
+        )
         resp = conn.getresponse()
         data = resp.read()
         conn.close()
@@ -262,7 +299,7 @@ def _b64_byte_index(b: bytearray) -> int:
     best, start, i = (len(b) // 2, 0), None, 0
     longest = 0
     while i < len(b):
-        if b[i] == 0x22:                      # aspas
+        if b[i] == 0x22:  # aspas
             if start is None:
                 start = i + 1
             else:

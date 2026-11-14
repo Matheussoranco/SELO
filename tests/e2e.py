@@ -25,10 +25,22 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def send_message(text: str, rid: Any = 1, method: str = "SendMessage", **params: Any) -> Dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": rid, "method": method,
-            "params": {"message": {"messageId": str(uuid.uuid4()), "role": "ROLE_USER",
-                                   "parts": [{"text": text}]}, **params}}
+def send_message(
+    text: str, rid: Any = 1, method: str = "SendMessage", **params: Any
+) -> Dict[str, Any]:
+    return {
+        "jsonrpc": "2.0",
+        "id": rid,
+        "method": method,
+        "params": {
+            "message": {
+                "messageId": str(uuid.uuid4()),
+                "role": "ROLE_USER",
+                "parts": [{"text": text}],
+            },
+            **params,
+        },
+    }
 
 
 def rpc(method: str, rid: Any = 1, **params: Any) -> Dict[str, Any]:
@@ -38,18 +50,31 @@ def rpc(method: str, rid: Any = 1, **params: Any) -> Dict[str, Any]:
 class Node:
     """Um agente de referencia e seu sidecar."""
 
-    def __init__(self, world: "World", name: str, proxied: bool = False,
-                 cfg: Optional[Dict[str, Any]] = None, start_agent: bool = True) -> None:
+    def __init__(
+        self,
+        world: "World",
+        name: str,
+        proxied: bool = False,
+        cfg: Optional[Dict[str, Any]] = None,
+        start_agent: bool = True,
+    ) -> None:
         self.world, self.name = world, name
-        self.agent = Proc(["-m", "selo.refagent", "--name", name]) if start_agent else None
+        self.agent = (
+            Proc(["-m", "selo.refagent", "--name", name]) if start_agent else None
+        )
         self.state_dir = os.path.join(world.tmp, name)
         self.config_path = os.path.join(world.tmp, f"{name}.json")
         self.port = free_port()
-        self.proxy: Optional[TapProxy] = TapProxy(f"http://127.0.0.1:{self.port}") if proxied else None
+        self.proxy: Optional[TapProxy] = (
+            TapProxy(f"http://127.0.0.1:{self.port}") if proxied else None
+        )
         conf: Dict[str, Any] = {
-            "name": name, "state_dir": self.state_dir,
+            "name": name,
+            "state_dir": self.state_dir,
             "public": {"host": "127.0.0.1", "port": self.port},
-            "agent": {"url": self.agent.info["url"] if self.agent else "http://127.0.0.1:9/"},
+            "agent": {
+                "url": self.agent.info["url"] if self.agent else "http://127.0.0.1:9/"
+            },
             "keystore": {"backend": "auto"},
         }
         if self.proxy:
@@ -93,12 +118,18 @@ class Node:
 
     def received(self) -> List[Dict[str, Any]]:
         import urllib.request
-        with urllib.request.urlopen(self.agent.info["url"] + "_debug/received", timeout=10) as r:
+
+        with urllib.request.urlopen(
+            self.agent.info["url"] + "_debug/received", timeout=10
+        ) as r:
             return json.loads(r.read())["received"]
 
     def debug(self) -> Dict[str, Any]:
         import urllib.request
-        with urllib.request.urlopen(self.agent.info["url"] + "_debug/received", timeout=10) as r:
+
+        with urllib.request.urlopen(
+            self.agent.info["url"] + "_debug/received", timeout=10
+        ) as r:
             return json.loads(r.read())
 
     def stop(self) -> None:
@@ -133,4 +164,6 @@ class World:
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def logs(self) -> str:
-        return "\n".join(f"--- {n.name}\n{n.sidecar.logs() if n.sidecar else ''}" for n in self.nodes)
+        return "\n".join(
+            f"--- {n.name}\n{n.sidecar.logs() if n.sidecar else ''}" for n in self.nodes
+        )

@@ -28,7 +28,12 @@ from typing import Any, Dict, Iterator, List, Optional
 
 from .net import HttpServer, Request, Response, sse_event
 
-FINAL = {"TASK_STATE_COMPLETED", "TASK_STATE_CANCELED", "TASK_STATE_FAILED", "TASK_STATE_REJECTED"}
+FINAL = {
+    "TASK_STATE_COMPLETED",
+    "TASK_STATE_CANCELED",
+    "TASK_STATE_FAILED",
+    "TASK_STATE_REJECTED",
+}
 
 
 def _now() -> str:
@@ -36,14 +41,18 @@ def _now() -> str:
 
 
 def _text(message: Dict[str, Any]) -> str:
-    return "".join(p.get("text", "") for p in message.get("parts", []) if isinstance(p, dict))
+    return "".join(
+        p.get("text", "") for p in message.get("parts", []) if isinstance(p, dict)
+    )
 
 
 class RefAgent:
-    def __init__(self, name: str = "ref", step: float = 0.2, inbound_token: Optional[str] = None) -> None:
+    def __init__(
+        self, name: str = "ref", step: float = 0.2, inbound_token: Optional[str] = None
+    ) -> None:
         self.name, self.step, self.inbound_token = name, step, inbound_token
         self.tasks: Dict[str, Dict[str, Any]] = {}
-        self.push: Dict[str, Dict[str, Dict[str, Any]]] = {}        # task_id -> {cfg_id: cfg}
+        self.push: Dict[str, Dict[str, Dict[str, Any]]] = {}  # task_id -> {cfg_id: cfg}
         self.subscribers: Dict[str, List["queue.Queue"]] = {}
         self.received: List[Dict[str, Any]] = []
         self.pushes_sent: List[Dict[str, Any]] = []
@@ -67,10 +76,15 @@ class RefAgent:
     def handle(self, req: Request) -> Response:
         if req.method == "GET" and req.path == "/_debug/received":
             with self._lock:
-                return Response(200, {"received": self.received, "pushes_sent": self.pushes_sent})
+                return Response(
+                    200, {"received": self.received, "pushes_sent": self.pushes_sent}
+                )
         if req.method != "POST":
             return Response(404, {"error": "not_found"})
-        if self.inbound_token and req.headers.get("authorization") != f"Bearer {self.inbound_token}":
+        if (
+            self.inbound_token
+            and req.headers.get("authorization") != f"Bearer {self.inbound_token}"
+        ):
             return Response(401, {"error": "unauthorized"})
         try:
             rpc = req.json()
@@ -101,7 +115,17 @@ class RefAgent:
                     return Response(200, _err(rid, -32001, "config not found"))
                 return Response(200, _ok(rid, cfg))
             if method == "ListTaskPushNotificationConfigs":
-                return Response(200, _ok(rid, {"configs": list(self.push.get(params.get("taskId"), {}).values())}))
+                return Response(
+                    200,
+                    _ok(
+                        rid,
+                        {
+                            "configs": list(
+                                self.push.get(params.get("taskId"), {}).values()
+                            )
+                        },
+                    ),
+                )
             if method == "DeleteTaskPushNotificationConfig":
                 self.push.get(params.get("taskId"), {}).pop(params.get("id"), None)
                 return Response(200, _ok(rid, {}))
@@ -114,13 +138,23 @@ class RefAgent:
         msg = params.get("message") or {}
         text = _text(msg)
         with self._lock:
-            self.received.append({"text": text, "sender": req.headers.get("x-selo-sender"),
-                                  "org": req.headers.get("x-selo-org"), "message": msg})
+            self.received.append(
+                {
+                    "text": text,
+                    "sender": req.headers.get("x-selo-sender"),
+                    "org": req.headers.get("x-selo-org"),
+                    "message": msg,
+                }
+            )
         task_id, ctx = str(uuid.uuid4()), msg.get("contextId") or str(uuid.uuid4())
         user_msg = dict(msg, taskId=task_id, contextId=ctx)
-        task = {"id": task_id, "contextId": ctx,
-                "status": {"state": "TASK_STATE_SUBMITTED", "timestamp": _now()},
-                "artifacts": [], "history": [user_msg]}
+        task = {
+            "id": task_id,
+            "contextId": ctx,
+            "status": {"state": "TASK_STATE_SUBMITTED", "timestamp": _now()},
+            "artifacts": [],
+            "history": [user_msg],
+        }
         with self._lock:
             self.tasks[task_id] = task
         cfg = (params.get("configuration") or {}).get("taskPushNotificationConfig")
@@ -130,7 +164,9 @@ class RefAgent:
             parts = text.split()
             steps = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 5
             self._set_state(task_id, "TASK_STATE_WORKING")
-            threading.Thread(target=self._work, args=(task_id, steps), daemon=True).start()
+            threading.Thread(
+                target=self._work, args=(task_id, steps), daemon=True
+            ).start()
         else:
             self._artifact(task_id, f"eco: {text}")
             self._set_state(task_id, "TASK_STATE_COMPLETED")
@@ -143,7 +179,9 @@ class RefAgent:
             with self._lock:
                 if self.tasks[task_id]["status"]["state"] in FINAL:
                     return
-            self._artifact(task_id, f"passo {i + 1}/{steps}", append=i > 0, last=i == steps - 1)
+            self._artifact(
+                task_id, f"passo {i + 1}/{steps}", append=i > 0, last=i == steps - 1
+            )
         self._set_state(task_id, "TASK_STATE_COMPLETED")
 
     def _task(self, task_id: Any) -> Dict[str, Any]:
@@ -161,20 +199,38 @@ class RefAgent:
         with self._lock:
             task = self.tasks[task_id]
             task["status"] = {"state": state, "timestamp": _now()}
-            ev = {"statusUpdate": {"taskId": task_id, "contextId": task["contextId"],
-                                   "status": task["status"]}}
+            ev = {
+                "statusUpdate": {
+                    "taskId": task_id,
+                    "contextId": task["contextId"],
+                    "status": task["status"],
+                }
+            }
         self._emit(task_id, ev, final=state in FINAL)
 
-    def _artifact(self, task_id: str, text: str, append: bool = False, last: bool = True) -> None:
+    def _artifact(
+        self, task_id: str, text: str, append: bool = False, last: bool = True
+    ) -> None:
         with self._lock:
             task = self.tasks[task_id]
-            art = {"artifactId": f"{task_id}-out", "name": "saida", "parts": [{"text": text}]}
+            art = {
+                "artifactId": f"{task_id}-out",
+                "name": "saida",
+                "parts": [{"text": text}],
+            }
             if append and task["artifacts"]:
                 task["artifacts"][0]["parts"].append({"text": text})
             else:
                 task["artifacts"] = [art]
-            ev = {"artifactUpdate": {"taskId": task_id, "contextId": task["contextId"], "artifact": art,
-                                     "append": append, "lastChunk": last}}
+            ev = {
+                "artifactUpdate": {
+                    "taskId": task_id,
+                    "contextId": task["contextId"],
+                    "artifact": art,
+                    "append": append,
+                    "lastChunk": last,
+                }
+            }
         self._emit(task_id, ev, final=False)
 
     def _emit(self, task_id: str, ev: Dict[str, Any], final: bool) -> None:
@@ -184,16 +240,24 @@ class RefAgent:
         for q in subs:
             q.put((ev, final))
         for cfg in cfgs:
-            threading.Thread(target=self._send_push, args=(cfg, ev), daemon=True).start()
+            threading.Thread(
+                target=self._send_push, args=(cfg, ev), daemon=True
+            ).start()
 
     def _send_push(self, cfg: Dict[str, Any], ev: Dict[str, Any]) -> None:
-        req = urllib.request.Request(cfg["url"], data=json.dumps(ev).encode(), method="POST",
-                                     headers={"Content-Type": "application/json",
-                                              "X-A2A-Notification-Token": cfg.get("token", "")})
+        req = urllib.request.Request(
+            cfg["url"],
+            data=json.dumps(ev).encode(),
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "X-A2A-Notification-Token": cfg.get("token", ""),
+            },
+        )
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
                 status = r.status
-        except Exception as e:                      # o teste inspeciona o resultado
+        except Exception as e:  # o teste inspeciona o resultado
             status = f"erro: {e}"
         with self._lock:
             self.pushes_sent.append({"url": cfg["url"], "event": ev, "status": status})
@@ -203,8 +267,12 @@ class RefAgent:
         with self._lock:
             if task_id not in self.tasks:
                 raise KeyError(task_id)
-            cfg = {"taskId": task_id, "id": params.get("id") or str(uuid.uuid4()),
-                   "url": params["url"], "token": params.get("token", "")}
+            cfg = {
+                "taskId": task_id,
+                "id": params.get("id") or str(uuid.uuid4()),
+                "url": params["url"],
+                "token": params.get("token", ""),
+            }
             self.push.setdefault(task_id, {})[cfg["id"]] = cfg
             return dict(cfg)
 
@@ -229,6 +297,7 @@ class RefAgent:
                 with self._lock:
                     if q in self.subscribers.get(task_id, []):
                         self.subscribers[task_id].remove(q)
+
         return Response(200, content_type="text/event-stream", stream=gen())
 
 

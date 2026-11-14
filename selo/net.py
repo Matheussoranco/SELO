@@ -43,18 +43,34 @@ def check_url(url: str) -> urllib.parse.SplitResult:
 class HttpClient:
     def __init__(self, ca_file: Optional[str] = None, timeout: float = TIMEOUT) -> None:
         self.timeout = timeout
-        self.ssl = ssl.create_default_context(cafile=ca_file) if ca_file else ssl.create_default_context()
+        self.ssl = (
+            ssl.create_default_context(cafile=ca_file)
+            if ca_file
+            else ssl.create_default_context()
+        )
 
-    def _conn(self, u: urllib.parse.SplitResult, timeout: Optional[float]) -> http.client.HTTPConnection:
+    def _conn(
+        self, u: urllib.parse.SplitResult, timeout: Optional[float]
+    ) -> http.client.HTTPConnection:
         t = timeout or self.timeout
         if u.scheme == "https":
-            return http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=t, context=self.ssl)
+            return http.client.HTTPSConnection(
+                u.hostname, u.port or 443, timeout=t, context=self.ssl
+            )
         return http.client.HTTPConnection(u.hostname, u.port or 80, timeout=t)
 
-    def request(self, method: str, url: str, body: Any = None, headers: Optional[Dict[str, str]] = None,
-                timeout: Optional[float] = None) -> Tuple[int, Dict[str, str], bytes]:
+    def request(
+        self,
+        method: str,
+        url: str,
+        body: Any = None,
+        headers: Optional[Dict[str, str]] = None,
+        timeout: Optional[float] = None,
+    ) -> Tuple[int, Dict[str, str], bytes]:
         u = check_url(url)
-        data = body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
+        data = (
+            body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
+        )
         hdrs = {"Content-Type": "application/json", **(headers or {})}
         conn = self._conn(u, timeout)
         path = (u.path or "/") + (f"?{u.query}" if u.query else "")
@@ -72,25 +88,48 @@ class HttpClient:
             raise SeloError("body_too_large")
         return resp.status, {k.lower(): v for k, v in resp.getheaders()}, raw
 
-    def json(self, method: str, url: str, body: Any = None, headers: Optional[Dict[str, str]] = None,
-             timeout: Optional[float] = None) -> Tuple[int, Any]:
+    def json(
+        self,
+        method: str,
+        url: str,
+        body: Any = None,
+        headers: Optional[Dict[str, str]] = None,
+        timeout: Optional[float] = None,
+    ) -> Tuple[int, Any]:
         status, _h, raw = self.request(method, url, body, headers, timeout)
         try:
             return status, json.loads(raw) if raw else None
         except ValueError:
-            raise SeloError("bad_response", f"{url}: resposta nao e JSON (HTTP {status})") from None
+            raise SeloError(
+                "bad_response", f"{url}: resposta nao e JSON (HTTP {status})"
+            ) from None
 
-    def stream(self, method: str, url: str, body: Any = None, headers: Optional[Dict[str, str]] = None,
-               timeout: Optional[float] = None) -> "StreamResponse":
+    def stream(
+        self,
+        method: str,
+        url: str,
+        body: Any = None,
+        headers: Optional[Dict[str, str]] = None,
+        timeout: Optional[float] = None,
+    ) -> "StreamResponse":
         """Abre uma requisicao cuja resposta pode ser SSE. O chamador fecha com `close()`."""
         u = check_url(url)
-        data = body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
+        data = (
+            body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
+        )
         conn = self._conn(u, timeout or 300.0)
         path = (u.path or "/") + (f"?{u.query}" if u.query else "")
         try:
-            conn.request(method, path, body=data, headers={"Content-Type": "application/json",
-                                                           "Accept": "text/event-stream, application/json",
-                                                           **(headers or {})})
+            conn.request(
+                method,
+                path,
+                body=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "text/event-stream, application/json",
+                    **(headers or {}),
+                },
+            )
             resp = conn.getresponse()
         except ssl.SSLError as e:
             conn.close()
@@ -102,7 +141,9 @@ class HttpClient:
 
 
 class StreamResponse:
-    def __init__(self, conn: http.client.HTTPConnection, resp: http.client.HTTPResponse) -> None:
+    def __init__(
+        self, conn: http.client.HTTPConnection, resp: http.client.HTTPResponse
+    ) -> None:
         self.conn, self.resp = conn, resp
         self.status = resp.status
         self.headers = {k.lower(): v for k, v in resp.getheaders()}
@@ -173,10 +214,20 @@ class Request:
 
 
 class Response:
-    def __init__(self, status: int = 200, body: Any = None, content_type: str = "application/json",
-                 headers: Optional[Dict[str, str]] = None,
-                 stream: Optional[Iterator[bytes]] = None) -> None:
-        self.status, self.content_type, self.headers, self.stream = status, content_type, headers or {}, stream
+    def __init__(
+        self,
+        status: int = 200,
+        body: Any = None,
+        content_type: str = "application/json",
+        headers: Optional[Dict[str, str]] = None,
+        stream: Optional[Iterator[bytes]] = None,
+    ) -> None:
+        self.status, self.content_type, self.headers, self.stream = (
+            status,
+            content_type,
+            headers or {},
+            stream,
+        )
         if body is None:
             self.body = b""
         elif isinstance(body, bytes):
@@ -186,7 +237,10 @@ class Response:
 
 
 def sse_event(data: str) -> bytes:
-    return b"".join(b"data: " + line.encode("utf-8") + b"\n" for line in data.split("\n")) + b"\n"
+    return (
+        b"".join(b"data: " + line.encode("utf-8") + b"\n" for line in data.split("\n"))
+        + b"\n"
+    )
 
 
 Handler = Callable[[Request], Response]
@@ -195,8 +249,13 @@ Handler = Callable[[Request], Response]
 class HttpServer:
     """Servidor HTTP com threads; TLS quando `ssl_context` e dado."""
 
-    def __init__(self, host: str, port: int, handler: Handler,
-                 ssl_context: Optional[ssl.SSLContext] = None) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        handler: Handler,
+        ssl_context: Optional[ssl.SSLContext] = None,
+    ) -> None:
         self.handler = handler
         outer = self
 
@@ -216,17 +275,25 @@ class HttpServer:
                     return
                 body = self.rfile.read(n) if n else b""
                 u = urllib.parse.urlsplit(self.path)
-                req = Request(self.command, u.path, dict(urllib.parse.parse_qsl(u.query)),
-                              {k.lower(): v for k, v in self.headers.items()}, body,
-                              self.client_address[0])
+                req = Request(
+                    self.command,
+                    u.path,
+                    dict(urllib.parse.parse_qsl(u.query)),
+                    {k.lower(): v for k, v in self.headers.items()},
+                    body,
+                    self.client_address[0],
+                )
                 try:
                     resp = outer.handler(req)
                 except SeloError as e:
                     resp = Response(400, {"error": e.code})
-                except Exception as e:                       # nunca vaza detalhes internos
+                except Exception as e:  # nunca vaza detalhes internos
                     import traceback
+
                     traceback.print_exc()
-                    resp = Response(500, {"error": "internal", "type": type(e).__name__})
+                    resp = Response(
+                        500, {"error": "internal", "type": type(e).__name__}
+                    )
                 self._send(resp)
 
             def _send(self, resp: Response) -> None:
@@ -267,7 +334,9 @@ class HttpServer:
 
         self.httpd = Srv((host.strip("[]"), port), H)
         if ssl_context is not None:
-            self.httpd.socket = ssl_context.wrap_socket(self.httpd.socket, server_side=True)
+            self.httpd.socket = ssl_context.wrap_socket(
+                self.httpd.socket, server_side=True
+            )
         self.port = self.httpd.server_address[1]
         self._thread: Optional[threading.Thread] = None
 

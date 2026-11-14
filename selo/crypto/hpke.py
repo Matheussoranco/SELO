@@ -11,8 +11,16 @@ from typing import Optional, Tuple
 from cryptography.hazmat.primitives.asymmetric import x25519
 
 from ..errors import SeloError
-from .primitives import (aead_open, aead_seal, hkdf_expand, hkdf_extract, x25519_dh,
-                         x25519_from_bytes, x25519_generate, x25519_pub)
+from .primitives import (
+    aead_open,
+    aead_seal,
+    hkdf_expand,
+    hkdf_extract,
+    x25519_dh,
+    x25519_from_bytes,
+    x25519_generate,
+    x25519_pub,
+)
 
 KEM_ID, KDF_ID, AEAD_ID = 0x0020, 0x0001, 0x0003
 N_SECRET = N_ENC = N_PK = N_SK = N_H = N_K = 32
@@ -32,8 +40,12 @@ def labeled_extract(suite: bytes, salt: bytes, label: bytes, ikm: bytes) -> byte
     return hkdf_extract(salt, b"HPKE-v1" + suite + label + ikm)
 
 
-def labeled_expand(suite: bytes, prk: bytes, label: bytes, info: bytes, length: int) -> bytes:
-    return hkdf_expand(prk, i2osp(length, 2) + b"HPKE-v1" + suite + label + info, length)
+def labeled_expand(
+    suite: bytes, prk: bytes, label: bytes, info: bytes, length: int
+) -> bytes:
+    return hkdf_expand(
+        prk, i2osp(length, 2) + b"HPKE-v1" + suite + label + info, length
+    )
 
 
 # -- KEM (secao 4.1) ----------------------------------------------------------------------
@@ -47,7 +59,9 @@ def _extract_and_expand(dh: bytes, kem_context: bytes) -> bytes:
     return labeled_expand(KEM_SUITE, prk, b"shared_secret", kem_context, N_SECRET)
 
 
-def encap(pk_r: bytes, sk_e: Optional[x25519.X25519PrivateKey] = None) -> Tuple[bytes, bytes]:
+def encap(
+    pk_r: bytes, sk_e: Optional[x25519.X25519PrivateKey] = None
+) -> Tuple[bytes, bytes]:
     sk_e = sk_e or x25519_generate()
     enc = x25519_pub(sk_e)
     dh = x25519_dh(sk_e, pk_r)
@@ -64,7 +78,11 @@ def decap(enc: bytes, sk_r: x25519.X25519PrivateKey) -> bytes:
 # -- Contexto (secao 5) -------------------------------------------------------------------
 class Context:
     def __init__(self, key: bytes, base_nonce: bytes, exporter_secret: bytes) -> None:
-        self.key, self.base_nonce, self.exporter_secret = key, base_nonce, exporter_secret
+        self.key, self.base_nonce, self.exporter_secret = (
+            key,
+            base_nonce,
+            exporter_secret,
+        )
         self.seq = 0
 
     def _nonce(self) -> bytes:
@@ -84,7 +102,9 @@ class Context:
         return pt
 
     def export(self, exporter_context: bytes, length: int) -> bytes:
-        return labeled_expand(HPKE_SUITE, self.exporter_secret, b"sec", exporter_context, length)
+        return labeled_expand(
+            HPKE_SUITE, self.exporter_secret, b"sec", exporter_context, length
+        )
 
 
 def key_schedule(shared_secret: bytes, info: bytes) -> Context:
@@ -93,13 +113,16 @@ def key_schedule(shared_secret: bytes, info: bytes) -> Context:
     info_hash = labeled_extract(HPKE_SUITE, b"", b"info_hash", info)
     ctx = bytes([MODE_BASE]) + psk_id_hash + info_hash
     secret = labeled_extract(HPKE_SUITE, shared_secret, b"secret", psk)
-    return Context(labeled_expand(HPKE_SUITE, secret, b"key", ctx, N_K),
-                   labeled_expand(HPKE_SUITE, secret, b"base_nonce", ctx, N_N),
-                   labeled_expand(HPKE_SUITE, secret, b"exp", ctx, N_H))
+    return Context(
+        labeled_expand(HPKE_SUITE, secret, b"key", ctx, N_K),
+        labeled_expand(HPKE_SUITE, secret, b"base_nonce", ctx, N_N),
+        labeled_expand(HPKE_SUITE, secret, b"exp", ctx, N_H),
+    )
 
 
-def setup_base_s(pk_r: bytes, info: bytes,
-                 sk_e: Optional[x25519.X25519PrivateKey] = None) -> Tuple[bytes, Context]:
+def setup_base_s(
+    pk_r: bytes, info: bytes, sk_e: Optional[x25519.X25519PrivateKey] = None
+) -> Tuple[bytes, Context]:
     shared, enc = encap(pk_r, sk_e)
     return enc, key_schedule(shared, info)
 
@@ -114,5 +137,7 @@ def seal_base(pk_r: bytes, info: bytes, aad: bytes, pt: bytes) -> Tuple[bytes, b
     return enc, ctx.seal(aad, pt)
 
 
-def open_base(enc: bytes, sk_r: x25519.X25519PrivateKey, info: bytes, aad: bytes, ct: bytes) -> bytes:
+def open_base(
+    enc: bytes, sk_r: x25519.X25519PrivateKey, info: bytes, aad: bytes, ct: bytes
+) -> bytes:
     return setup_base_r(enc, sk_r, info).open(aad, ct)

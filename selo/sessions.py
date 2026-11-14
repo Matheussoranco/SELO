@@ -16,7 +16,9 @@ class SessionManager:
     def call(self, info: Any, trust: Any, rpc: Dict[str, Any]) -> Dict[str, Any]:
         return self.sc.call_envelope(info, trust, rpc)
 
-    def stream(self, info: Any, trust: Any, rpc: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+    def stream(
+        self, info: Any, trust: Any, rpc: Dict[str, Any]
+    ) -> Iterator[Dict[str, Any]]:
         raise SeloError("session_required", "streaming exige sessao")
 
     def handle_handshake(self, req: Request) -> Response:

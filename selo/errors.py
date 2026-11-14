@@ -19,14 +19,19 @@ JSONRPC_CODES = {
 class SeloError(Exception):
     """Falha de protocolo com codigo estavel (`code`) e detalhe opcional para logs."""
 
-    def __init__(self, code: str, detail: str = "", data: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, code: str, detail: str = "", data: Optional[Dict[str, Any]] = None
+    ) -> None:
         super().__init__(f"{code}: {detail}" if detail else code)
         self.code = code
         self.detail = detail
         self.data = data or {}
 
     def jsonrpc_error(self) -> Dict[str, Any]:
-        err: Dict[str, Any] = {"code": JSONRPC_CODES.get(self.code, -32000), "message": self.code}
+        err: Dict[str, Any] = {
+            "code": JSONRPC_CODES.get(self.code, -32000),
+            "message": self.code,
+        }
         data = dict(self.data)
         if self.detail:
             data.setdefault("detail", self.detail)

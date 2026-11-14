@@ -33,10 +33,18 @@ def capsule_digest(capsule: Optional[Dict[str, Any]]) -> bytes:
 
 
 def check_capsule_shape(capsule: Any, org: str) -> None:
-    if (not isinstance(capsule, dict) or set(capsule) != {"org", "enc", "ct"}
-            or capsule["org"] != org):
-        raise SeloError("escrow_required", f"capsula de escrow ausente ou de outra organizacao ({org})")
+    if (
+        not isinstance(capsule, dict)
+        or set(capsule) != {"org", "enc", "ct"}
+        or capsule["org"] != org
+    ):
+        raise SeloError(
+            "escrow_required",
+            f"capsula de escrow ausente ou de outra organizacao ({org})",
+        )
 
 
 def open_capsule(capsule: Dict[str, Any], escrow_sk, ad: bytes) -> bytes:
-    return hpke.open_base(unb64u(capsule["enc"]), escrow_sk, INFO, sha256(ad), unb64u(capsule["ct"]))
+    return hpke.open_base(
+        unb64u(capsule["enc"]), escrow_sk, INFO, sha256(ad), unb64u(capsule["ct"])
+    )

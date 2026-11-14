@@ -20,8 +20,19 @@ from typing import Any, Dict, Optional, Tuple
 from cryptography.hazmat.primitives.asymmetric import x25519
 
 from ..errors import SeloError
-from .primitives import (aead_open, aead_seal, b64u, hkdf, hmac_sha256, unb64u, x25519_dh,
-                         x25519_from_bytes, x25519_generate, x25519_priv, x25519_pub)
+from .primitives import (
+    aead_open,
+    aead_seal,
+    b64u,
+    hkdf,
+    hmac_sha256,
+    unb64u,
+    x25519_dh,
+    x25519_from_bytes,
+    x25519_generate,
+    x25519_priv,
+    x25519_pub,
+)
 
 MAX_SKIP = 256
 MAX_STORED = 1024
@@ -69,8 +80,9 @@ class Ratchet:
 
     # -- inicializacao --------------------------------------------------------------------
     @classmethod
-    def init_alice(cls, sk: bytes, bob_pub: bytes,
-                   dhs: Optional[x25519.X25519PrivateKey] = None) -> "Ratchet":
+    def init_alice(
+        cls, sk: bytes, bob_pub: bytes, dhs: Optional[x25519.X25519PrivateKey] = None
+    ) -> "Ratchet":
         r = cls()
         r.dhs = dhs or x25519_generate()
         r.dhr = bob_pub
@@ -90,7 +102,9 @@ class Ratchet:
 
     def next_send(self) -> Tuple[Dict[str, Any], bytes]:
         if self.cks is None:
-            raise SeloError("ratchet_not_ready", "o respondedor so envia depois de receber")
+            raise SeloError(
+                "ratchet_not_ready", "o respondedor so envia depois de receber"
+            )
         self.cks, mk = kdf_ck(self.cks)
         hdr = {"dh": b64u(x25519_pub(self.dhs)), "pn": self.pn, "n": self.ns}
         self.ns += 1
@@ -149,9 +163,16 @@ class Ratchet:
     def to_dict(self) -> Dict[str, Any]:
         def opt(b: Optional[bytes]) -> Optional[str]:
             return None if b is None else b64u(b)
+
         return {
-            "dhs": b64u(x25519_priv(self.dhs)), "dhr": opt(self.dhr), "rk": b64u(self.rk),
-            "cks": opt(self.cks), "ckr": opt(self.ckr), "ns": self.ns, "nr": self.nr, "pn": self.pn,
+            "dhs": b64u(x25519_priv(self.dhs)),
+            "dhr": opt(self.dhr),
+            "rk": b64u(self.rk),
+            "cks": opt(self.cks),
+            "ckr": opt(self.ckr),
+            "ns": self.ns,
+            "nr": self.nr,
+            "pn": self.pn,
             "skipped": [[b64u(d), n, b64u(mk)] for (d, n), mk in self.skipped.items()],
         }
 
@@ -159,16 +180,31 @@ class Ratchet:
     def from_dict(cls, d: Dict[str, Any]) -> "Ratchet":
         def opt(s: Optional[str]) -> Optional[bytes]:
             return None if s is None else unb64u(s)
+
         r = cls()
         r.dhs = x25519_from_bytes(unb64u(d["dhs"]))
-        r.dhr, r.rk, r.cks, r.ckr = opt(d["dhr"]), unb64u(d["rk"]), opt(d["cks"]), opt(d["ckr"])
+        r.dhr, r.rk, r.cks, r.ckr = (
+            opt(d["dhr"]),
+            unb64u(d["rk"]),
+            opt(d["cks"]),
+            opt(d["ckr"]),
+        )
         r.ns, r.nr, r.pn = d["ns"], d["nr"], d["pn"]
         r.skipped = {(unb64u(a), n): unb64u(c) for a, n, c in d["skipped"]}
         return r
 
     def _snapshot(self) -> Dict[str, Any]:
-        return {"dhs": self.dhs, "dhr": self.dhr, "rk": self.rk, "cks": self.cks, "ckr": self.ckr,
-                "ns": self.ns, "nr": self.nr, "pn": self.pn, "skipped": copy.copy(self.skipped)}
+        return {
+            "dhs": self.dhs,
+            "dhr": self.dhr,
+            "rk": self.rk,
+            "cks": self.cks,
+            "ckr": self.ckr,
+            "ns": self.ns,
+            "nr": self.nr,
+            "pn": self.pn,
+            "skipped": copy.copy(self.skipped),
+        }
 
     def _restore(self, s: Dict[str, Any]) -> None:
         for k, v in s.items():
@@ -179,7 +215,7 @@ def _parse_hdr(hdr: Any) -> Tuple[bytes, int, int]:
     if not isinstance(hdr, dict) or set(hdr) != {"dh", "pn", "n"}:
         raise SeloError("bad_header")
     pn, n = hdr["pn"], hdr["n"]
-    if not all(type(x) is int and 0 <= x < 2 ** 32 for x in (pn, n)):
+    if not all(type(x) is int and 0 <= x < 2**32 for x in (pn, n)):
         raise SeloError("bad_header")
     dh = unb64u(hdr["dh"])
     if len(dh) != 32:

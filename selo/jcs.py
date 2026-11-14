@@ -15,9 +15,17 @@ from typing import Any
 
 from .errors import SeloError
 
-MAX_SAFE_INT = 2 ** 53 - 1
+MAX_SAFE_INT = 2**53 - 1
 
-_ESC = {0x22: '\\"', 0x5C: "\\\\", 0x08: "\\b", 0x09: "\\t", 0x0A: "\\n", 0x0C: "\\f", 0x0D: "\\r"}
+_ESC = {
+    0x22: '\\"',
+    0x5C: "\\\\",
+    0x08: "\\b",
+    0x09: "\\t",
+    0x0A: "\\n",
+    0x0C: "\\f",
+    0x0D: "\\r",
+}
 
 
 def canonicalize(value: Any) -> bytes:
@@ -88,7 +96,7 @@ def number(x: float) -> str:
     if math.isnan(x) or math.isinf(x):
         raise SeloError("bad_json", "NaN e infinito nao sao JSON")
     if x == 0:
-        return "0"                      # inclui -0
+        return "0"  # inclui -0
     sign = "-" if x < 0 else ""
     # repr do Python produz o menor numero de digitos que reproduz o double, como o ES.
     r = repr(abs(x))
@@ -115,5 +123,11 @@ def number(x: float) -> str:
         s = "0." + "0" * (-n) + digits
     else:
         e = n - 1
-        s = digits[0] + ("." + digits[1:] if k > 1 else "") + "e" + ("+" if e > 0 else "-") + str(abs(e))
+        s = (
+            digits[0]
+            + ("." + digits[1:] if k > 1 else "")
+            + "e"
+            + ("+" if e > 0 else "-")
+            + str(abs(e))
+        )
     return sign + s

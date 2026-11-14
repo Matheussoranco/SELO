@@ -11,20 +11,25 @@ from .errors import SeloError
 
 DEFAULTS: Dict[str, Any] = {
     "name": "agente",
-    "state_dir": None,                 # obrigatorio
+    "state_dir": None,  # obrigatorio
     "public": {"host": "127.0.0.1", "port": 0, "url": None, "tls": None},
-    "local": {"mode": "auto", "port": 0},            # auto | pipe | unix | http
+    "local": {"mode": "auto", "port": 0},  # auto | pipe | unix | http
     "agent": {"url": None, "inbound_token": None},
-    "card": {"description": "", "skills": None, "validity": 24 * 3600, "max_card_age": 24 * 3600},
+    "card": {
+        "description": "",
+        "skills": None,
+        "validity": 24 * 3600,
+        "max_card_age": 24 * 3600,
+    },
     "keystore": {"backend": "auto"},
     "peers": {},
     "trust": {"allow_unattested": None, "peers": [], "orgs": []},
-    "org": None,                       # {"descriptor": {...}, "attestation": {...}}
+    "org": None,  # {"descriptor": {...}, "attestation": {...}}
     "push": {"allowed_destinations": []},
     "tls": {"ca_file": None},
-    "policy": None,                    # "modulo:funcao"
-    "clock_offset": 0,                 # so para testes (relogio injetavel)
-    "capture_path": None,              # grava o trafego bruto recebido/enviado (auditoria)
+    "policy": None,  # "modulo:funcao"
+    "clock_offset": 0,  # so para testes (relogio injetavel)
+    "capture_path": None,  # grava o trafego bruto recebido/enviado (auditoria)
     "session_ttl": 24 * 3600,
 }
 

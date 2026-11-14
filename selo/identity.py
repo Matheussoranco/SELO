@@ -13,9 +13,20 @@ from typing import Any, Dict, List, Optional, Tuple
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 
 from . import jcs
-from .crypto.primitives import (b64u, ed25519_from_bytes, ed25519_generate, ed25519_priv,
-                                ed25519_pub, ed25519_verify, sha256, unb64u, x25519_from_bytes,
-                                x25519_generate, x25519_priv, x25519_pub)
+from .crypto.primitives import (
+    b64u,
+    ed25519_from_bytes,
+    ed25519_generate,
+    ed25519_priv,
+    ed25519_pub,
+    ed25519_verify,
+    sha256,
+    unb64u,
+    x25519_from_bytes,
+    x25519_generate,
+    x25519_priv,
+    x25519_pub,
+)
 from .errors import SeloError
 
 ROTATION_GRACE = 300
@@ -45,10 +56,11 @@ class KeyEntry:
 @dataclass
 class KelState:
     """Resultado da verificacao de uma KEL."""
+
     agent_id: str
     entries: List[KeyEntry]
     revoked: bool
-    head: str                      # hash da ultima declaracao
+    head: str  # hash da ultima declaracao
     revoked_at: Optional[int] = None
 
     @property
@@ -100,7 +112,13 @@ def verify_kel(kel: Any) -> KelState:
         t = b.get("t")
         data = KEL_DOMAIN + jcs.canonicalize(b)
         if i == 0:
-            if t != "inception" or set(b) != {"t", "seq", "sig_pub", "agree_pub", "iat"}:
+            if t != "inception" or set(b) != {
+                "t",
+                "seq",
+                "sig_pub",
+                "agree_pub",
+                "iat",
+            }:
                 raise SeloError("bad_kel", "inception")
             sig_pub, agree_pub = unb64u(b["sig_pub"]), unb64u(b["agree_pub"])
             if len(sig_pub) != 32 or len(agree_pub) != 32 or len(sigs) != 1:
@@ -114,13 +132,18 @@ def verify_kel(kel: Any) -> KelState:
                 raise SeloError("bad_kel", "prev")
             cur = entries[-1]
             if t == "rotation":
-                if set(b) != {"t", "seq", "prev", "sig_pub", "agree_pub", "iat"} or len(sigs) != 2:
+                if (
+                    set(b) != {"t", "seq", "prev", "sig_pub", "agree_pub", "iat"}
+                    or len(sigs) != 2
+                ):
                     raise SeloError("bad_kel", "rotation")
                 sig_pub, agree_pub = unb64u(b["sig_pub"]), unb64u(b["agree_pub"])
                 if len(sig_pub) != 32 or len(agree_pub) != 32:
                     raise SeloError("bad_kel", "rotation")
-                if not (ed25519_verify(cur.sig_pub, unb64u(sigs[0]), data)
-                        and ed25519_verify(sig_pub, unb64u(sigs[1]), data)):
+                if not (
+                    ed25519_verify(cur.sig_pub, unb64u(sigs[0]), data)
+                    and ed25519_verify(sig_pub, unb64u(sigs[1]), data)
+                ):
                     raise SeloError("bad_kel", "assinatura da rotation")
                 entries.append(KeyEntry(i, sig_pub, agree_pub, iat))
             elif t == "revocation":
@@ -138,6 +161,7 @@ def verify_kel(kel: Any) -> KelState:
 @dataclass
 class Identity:
     """Chaves privadas de um agente (atuais e da geracao anterior) e sua KEL."""
+
     sig_keys: List[ed25519.Ed25519PrivateKey]
     agree_keys: List[x25519.X25519PrivateKey]
     kel: List[Dict[str, Any]]
@@ -146,8 +170,13 @@ class Identity:
     @classmethod
     def generate(cls, now: int) -> "Identity":
         sig, agree = ed25519_generate(), x25519_generate()
-        body = {"t": "inception", "seq": 0, "sig_pub": b64u(ed25519_pub(sig)),
-                "agree_pub": b64u(x25519_pub(agree)), "iat": int(now)}
+        body = {
+            "t": "inception",
+            "seq": 0,
+            "sig_pub": b64u(ed25519_pub(sig)),
+            "agree_pub": b64u(x25519_pub(agree)),
+            "iat": int(now),
+        }
         return cls([sig], [agree], [{"body": body, "sigs": [_sign(sig, body)]}])
 
     @property
@@ -175,7 +204,9 @@ class Identity:
     def agree_key_for(self, seq: int, now: float) -> x25519.X25519PrivateKey:
         """Chave de acordo para mensagens enderecadas a `seq` (atual ou anterior na janela)."""
         if not self.state.key_usable(seq, now):
-            raise SeloError("wrong_recipient", "seq de chave do destinatario nao aceito")
+            raise SeloError(
+                "wrong_recipient", "seq de chave do destinatario nao aceito"
+            )
         offset = self.seq - seq
         if offset >= len(self.agree_keys):
             raise SeloError("wrong_recipient", "chave anterior indisponivel")
@@ -185,37 +216,58 @@ class Identity:
         if self.state.revoked:
             raise SeloError("identity_revoked")
         sig, agree = ed25519_generate(), x25519_generate()
-        body = {"t": "rotation", "seq": self.seq + 1, "prev": self.state.head,
-                "sig_pub": b64u(ed25519_pub(sig)), "agree_pub": b64u(x25519_pub(agree)),
-                "iat": int(now)}
-        self.kel.append({"body": body, "sigs": [_sign(self.sig_key, body), _sign(sig, body)]})
+        body = {
+            "t": "rotation",
+            "seq": self.seq + 1,
+            "prev": self.state.head,
+            "sig_pub": b64u(ed25519_pub(sig)),
+            "agree_pub": b64u(x25519_pub(agree)),
+            "iat": int(now),
+        }
+        self.kel.append(
+            {"body": body, "sigs": [_sign(self.sig_key, body), _sign(sig, body)]}
+        )
         self.sig_keys = [self.sig_key, sig]
         self.agree_keys = [self.agree_key, agree]
         self._state = None
 
     def revoke(self, now: int) -> None:
-        body = {"t": "revocation", "seq": self.seq + 1, "prev": self.state.head, "iat": int(now)}
+        body = {
+            "t": "revocation",
+            "seq": self.seq + 1,
+            "prev": self.state.head,
+            "iat": int(now),
+        }
         self.kel.append({"body": body, "sigs": [_sign(self.sig_key, body)]})
         self._state = None
 
     # -- serializacao para o cofre de chaves ----------------------------------------------
     def to_secret(self) -> Dict[str, Any]:
-        return {"sig": [b64u(ed25519_priv(k)) for k in self.sig_keys],
-                "agree": [b64u(x25519_priv(k)) for k in self.agree_keys],
-                "kel": self.kel}
+        return {
+            "sig": [b64u(ed25519_priv(k)) for k in self.sig_keys],
+            "agree": [b64u(x25519_priv(k)) for k in self.agree_keys],
+            "kel": self.kel,
+        }
 
     @classmethod
     def from_secret(cls, d: Dict[str, Any]) -> "Identity":
-        ident = cls([ed25519_from_bytes(unb64u(k)) for k in d["sig"]],
-                    [x25519_from_bytes(unb64u(k)) for k in d["agree"]], d["kel"])
+        ident = cls(
+            [ed25519_from_bytes(unb64u(k)) for k in d["sig"]],
+            [x25519_from_bytes(unb64u(k)) for k in d["agree"]],
+            d["kel"],
+        )
         st = ident.state
-        if ed25519_pub(ident.sig_key) != st.current.sig_pub or \
-                x25519_pub(ident.agree_key) != st.current.agree_pub:
+        if (
+            ed25519_pub(ident.sig_key) != st.current.sig_pub
+            or x25519_pub(ident.agree_key) != st.current.agree_pub
+        ):
             raise SeloError("bad_identity", "chaves nao conferem com a KEL")
         return ident
 
 
-def check_extends(pinned: Optional[Tuple[int, str]], state: KelState, kel: List[Dict[str, Any]]) -> None:
+def check_extends(
+    pinned: Optional[Tuple[int, str]], state: KelState, kel: List[Dict[str, Any]]
+) -> None:
     """Exige que a KEL estenda a fixada (especificacao 5.2). `pinned` = (seq, hash)."""
     if pinned is None:
         return

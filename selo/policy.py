@@ -6,8 +6,15 @@ from typing import Any, Optional
 
 
 class NullHook:
-    def check(self, direction: str, stage: str, peer_id: str, peer_org: Optional[str], rpc: Any,
-              method: Optional[str] = None) -> None:
+    def check(
+        self,
+        direction: str,
+        stage: str,
+        peer_id: str,
+        peer_org: Optional[str],
+        rpc: Any,
+        method: Optional[str] = None,
+    ) -> None:
         return None
 
 
