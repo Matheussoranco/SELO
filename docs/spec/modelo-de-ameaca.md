@@ -43,4 +43,4 @@ Este documento é citado pela [especificação](selo-v1.md) e define contra quem
 * O IK permite repetir a mensagem 1 do handshake (custo de recursos no respondedor, sem acesso à sessão).
 * O escrow não é verificável pelo receptor (seção 11 da especificação).
 * A primeira busca do Card de um agente sem organização confia na URL usada (TOFU); depois disso, a KEL fica fixada.
-* A implementação não teve auditoria independente; o modelo formal do handshake está em `docs/formal/` (ticket #11).
+* A implementação não teve auditoria independente. O modelo formal do handshake está em `docs/formal/` (ticket #11), mas ainda não foi verificado por ferramenta (ver `docs/formal/README.md`).

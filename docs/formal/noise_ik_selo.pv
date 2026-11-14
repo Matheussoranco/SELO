@@ -1,0 +1,160 @@
+(* SELO v1 -- modelo ProVerif do handshake de sessao (especificacao, secao 9).
+
+   Noise_IK_25519_ChaChaPoly_SHA256 seguido da derivacao da raiz do ratchet
+   SK = HKDF(salt = h, ikm = ck, "selo/1/ratchet-root").
+
+   Atacante de Dolev-Yao na rede (adversarios A1 e A2 do modelo de ameaca), sessoes
+   ilimitadas em paralelo, o atacante tem a propria identidade e pode falar com os
+   agentes honestos. Fase 1: as chaves estaticas dos dois agentes honestos vazam
+   (comprometimento posterior, para sigilo progressivo).
+
+   A ligacao chave estatica <-> agent_id e feita pelo Agent Card assinado (secao 7) e
+   nao e modelada: aqui a identidade de um agente e a sua chave estatica X25519.
+
+   Rodar:  proverif docs/formal/noise_ik_selo.pv
+   Resultado esperado e interpretacao: docs/formal/README.md *)
+
+set traceDisplay = none.
+
+free c: channel.
+
+type exponent.
+type G.
+type key.
+
+(* Diffie-Hellman *)
+const g: G [data].
+fun exp(G, exponent): G.
+equation forall x: exponent, y: exponent; exp(exp(g, x), y) = exp(exp(g, y), x).
+
+fun G2b(G): bitstring [data, typeConverter].
+
+(* hash, HKDF (Noise) e derivacao da raiz: funcoes livres, resistentes a colisao *)
+fun hash(bitstring, bitstring): bitstring.
+fun kdf_ck(bitstring, G): bitstring.
+fun kdf_k(bitstring, G): key.
+fun root(bitstring, bitstring): key.
+
+(* AEAD: aenc(chave, dado associado, texto) *)
+fun aenc(key, bitstring, bitstring): bitstring.
+reduc forall k: key, ad: bitstring, m: bitstring; adec(k, ad, aenc(k, ad, m)) = m.
+
+const proto: bitstring.     (* "Noise_IK_25519_ChaChaPoly_SHA256" *)
+const prologue: bitstring.  (* "selo/1/session" || JCS({responder, responder_seq}) *)
+
+(* Segredos de teste *)
+free p1_secret: bitstring [private].  (* payload da mensagem 1 (iniciador honesto -> respondedor honesto) *)
+free p2_secret: bitstring [private].  (* payload da mensagem 2 (respondedor honesto -> iniciador honesto) *)
+const p_public: bitstring.
+
+event InitStart(G, G, bitstring).      (* pk iniciador, pk respondedor, h depois da msg 1 *)
+event InitDone(G, G, key).             (* iniciador terminou com um respondedor honesto *)
+event RespDone(G, G, key).             (* respondedor terminou (qualquer iniciador) *)
+event RespDoneHonest(G, G, bitstring). (* respondedor aceitou iniciador honesto; h depois da msg 1 *)
+
+(* ---- iniciador ---------------------------------------------------------------- *)
+let Initiator(s_i: exponent, pk_r: G, honest: bool, p1: bitstring) =
+  new e: exponent;
+  let pk_i = exp(g, s_i) in
+  let ck0 = proto in
+  let h0 = hash(proto, prologue) in
+  let h1 = hash(h0, G2b(pk_r)) in                         (* pre-mensagem <- s *)
+  let epub = exp(g, e) in
+  let h2 = hash(h1, G2b(epub)) in                         (* -> e *)
+  let ck1 = kdf_ck(ck0, exp(pk_r, e)) in                  (* es *)
+  let k1  = kdf_k(ck0, exp(pk_r, e)) in
+  let cs  = aenc(k1, h2, G2b(pk_i)) in                    (* s *)
+  let h3  = hash(h2, cs) in
+  let ck2 = kdf_ck(ck1, exp(pk_r, s_i)) in                (* ss *)
+  let k2  = kdf_k(ck1, exp(pk_r, s_i)) in
+  let cp1 = aenc(k2, h3, p1) in
+  let h4  = hash(h3, cp1) in
+  event InitStart(pk_i, pk_r, h4);
+  out(c, (epub, cs, cp1));
+  in(c, (repub: G, cp2: bitstring));
+  let h5  = hash(h4, G2b(repub)) in                       (* <- e *)
+  let ck3 = kdf_ck(ck2, exp(repub, e)) in                 (* ee *)
+  let ck4 = kdf_ck(ck3, exp(repub, s_i)) in               (* se *)
+  let k4  = kdf_k(ck3, exp(repub, s_i)) in
+  let p2  = adec(k4, h5, cp2) in
+  let h6  = hash(h5, cp2) in
+  let sk  = root(ck4, h6) in
+  if honest then event InitDone(pk_i, pk_r, sk).
+
+(* ---- respondedor -------------------------------------------------------------- *)
+let RespondTail(spub: G, pk_r: G, epub: G, ck2: bitstring, h4: bitstring,
+                re: exponent, p2: bitstring, honest_peer: bool) =
+  let repub = exp(g, re) in
+  let h5  = hash(h4, G2b(repub)) in
+  let ck3 = kdf_ck(ck2, exp(epub, re)) in                 (* ee *)
+  let ck4 = kdf_ck(ck3, exp(spub, re)) in                 (* se *)
+  let k4  = kdf_k(ck3, exp(spub, re)) in
+  let cp2 = aenc(k4, h5, p2) in
+  let h6  = hash(h5, cp2) in
+  let sk  = root(ck4, h6) in
+  event RespDone(spub, pk_r, sk);
+  if honest_peer then (event RespDoneHonest(spub, pk_r, h4); out(c, (repub, cp2)))
+  else out(c, (repub, cp2)).
+
+let Responder(s_r: exponent, pk_I: G) =
+  in(c, (epub: G, cs: bitstring, cp1: bitstring));
+  new re: exponent;
+  let pk_r = exp(g, s_r) in
+  let ck0 = proto in
+  let h0  = hash(proto, prologue) in
+  let h1  = hash(h0, G2b(pk_r)) in                        (* pre-mensagem <- s *)
+  let h2  = hash(h1, G2b(epub)) in                        (* -> e *)
+  let ck1 = kdf_ck(ck0, exp(epub, s_r)) in                (* es *)
+  let k1  = kdf_k(ck0, exp(epub, s_r)) in
+  let G2b(spub) = adec(k1, h2, cs) in                     (* s *)
+  let h3  = hash(h2, cs) in
+  let ck2 = kdf_ck(ck1, exp(spub, s_r)) in                (* ss *)
+  let k2  = kdf_k(ck1, exp(spub, s_r)) in
+  let p1  = adec(k2, h3, cp1) in
+  let h4  = hash(h3, cp1) in
+  if spub = pk_I then RespondTail(spub, pk_r, epub, ck2, h4, re, p2_secret, true)
+  else RespondTail(spub, pk_r, epub, ck2, h4, re, p_public, false).
+
+(* ---- consultas ---------------------------------------------------------------- *)
+
+(* Q1: a raiz do ratchet de uma sessao honesta e secreta, mesmo apos o vazamento das
+       chaves estaticas na fase 1 (sigilo progressivo da sessao). *)
+query k: key, a: G, b: G; event(InitDone(a, b, k)) && attacker(k).
+
+(* Q2: o payload da mensagem 2 fica secreto mesmo apos o vazamento (usa ee e se). *)
+query attacker(p2_secret) phase 1.
+
+(* Q3: o payload da mensagem 1 e secreto enquanto as chaves estaticas nao vazam. *)
+query attacker(p1_secret) phase 0.
+
+(* Q4: ESPERADO FALSO. A mensagem 1 do IK nao tem sigilo progressivo contra o
+       comprometimento posterior da chave do respondedor (es e ss so usam a chave
+       efemera do iniciador e chaves estaticas). Por isso o SELO so coloca em m1 o
+       agent_id, a URL do Card, o seq e o iat (dados nao secretos), nunca requisicoes. *)
+query attacker(p1_secret) phase 1.
+
+(* Q5: autenticacao do respondedor, injetiva: se o iniciador termina com a chave de um
+       respondedor honesto, esse respondedor terminou a mesma sessao, uma vez. *)
+query k: key, a: G, b: G; inj-event(InitDone(a, b, k)) ==> inj-event(RespDone(a, b, k)).
+
+(* Q6: autenticacao do iniciador (nao injetiva): se o respondedor aceita o iniciador
+       honesto, esse iniciador comecou a sessao com ele. *)
+query a: G, b: G, h: bitstring; event(RespDoneHonest(a, b, h)) ==> event(InitStart(a, b, h)).
+
+(* Q7: ESPERADO FALSO. A versao injetiva falha: a mensagem 1 pode ser repetida
+       (replay) e o respondedor aceita de novo. A sessao repetida e inutil para o
+       atacante (ele nao tem a chave efemera do iniciador; ver Q1); risco documentado
+       em docs/spec/modelo-de-ameaca.md. *)
+query a: G, b: G, h: bitstring; inj-event(RespDoneHonest(a, b, h)) ==> inj-event(InitStart(a, b, h)).
+
+process
+  new s_I: exponent; new s_R: exponent;
+  let pk_I = exp(g, s_I) in
+  let pk_R = exp(g, s_R) in
+  out(c, (pk_I, pk_R));
+  (
+      (! Initiator(s_I, pk_R, true, p1_secret))
+    | (! in(c, pk_x: G); Initiator(s_I, pk_x, false, p_public))   (* sessoes com quem o atacante escolher *)
+    | (! Responder(s_R, pk_I))
+    | (phase 1; out(c, (s_I, s_R)))
+  )
