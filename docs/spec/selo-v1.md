@@ -228,11 +228,13 @@ Propriedades exigidas: cada chave de mensagem é usada uma vez e apagada (uma me
 ## 10. Notificações push
 
 1. O agente cliente cria a configuração push (`CreateTaskPushNotificationConfig`, ou `configuration.taskPushNotificationConfig` em `SendMessage`) com a própria URL de webhook local.
-2. O sidecar cliente reescreve `url` para `<base pública do cliente>/selo/v1/push/<ref>`, com `ref` aleatório de 16 bytes, e guarda `ref → (webhook local, agent_id do servidor)`.
+2. O sidecar cliente reescreve `url` para `<base pública do cliente>/selo/v1/push/<ref>`, com `ref` aleatório de 16 bytes, e guarda `ref → (webhook local, agent_id do servidor)`. O webhook DEVE ser uma URL `http(s)` de loopback; caso contrário, o cliente recusa com `push_destination_denied`. Uma URL que já tem a forma `<base>/selo/v1/push/<ref>` (destino de terceiro) não é reescrita: quem decide é a lista de permitidos do servidor.
 3. O sidecar servidor valida o destino **antes de qualquer conexão**: a URL DEVE ter a forma `<base>/selo/v1/push/<ref>`, e `<base>` DEVE ser a base do Card do próprio requisitante ou constar em `push.allowed_destinations`. Depois busca e verifica o Card em `<base>` (um destino que não é endpoint SELO é recusado). Falha → erro JSON-RPC `push_destination_denied` (−32095). Push para URL arbitrária é proibido.
 4. O sidecar servidor reescreve `url` para uma URL local de entrada (`http://127.0.0.1:<porta>/push-intake/<id>`, `id` aleatório de 16 bytes) e repassa a configuração ao agente.
 5. Quando o agente servidor faz o POST da notificação na URL local, o sidecar a envia como envelope `push` (`{"push": {"ref", "token", "payload"}}`) para `<base>/selo/v1/push/<ref>`.
-6. O sidecar cliente verifica o envelope (8.3), exige `sender ==` o `agent_id` guardado para `ref`, e entrega `payload` ao webhook local, com o token original no cabeçalho `X-A2A-Notification-Token`.
+6. O sidecar cliente verifica o envelope (8.3), exige `sender ==` o `agent_id` guardado para `ref`, entrega `payload` ao webhook local, com o token original no cabeçalho `X-A2A-Notification-Token`, e responde com um envelope `resp` (`{"ack": <status HTTP do webhook>}`).
+
+As respostas de `GetTaskPushNotificationConfig` e `ListTaskPushNotificationConfigs` mostram a URL de entrada local do servidor, não o webhook original do cliente.
 
 Relay para agentes atrás de NAT está fora da v1: o destino precisa ser alcançável.
 

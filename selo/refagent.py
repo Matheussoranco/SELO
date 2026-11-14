@@ -56,6 +56,9 @@ class RefAgent:
         self.subscribers: Dict[str, List["queue.Queue"]] = {}
         self.received: List[Dict[str, Any]] = []
         self.pushes_sent: List[Dict[str, Any]] = []
+        self.webhook: List[Dict[str, Any]] = (
+            []
+        )  # notificacoes push recebidas por este agente
         self._lock = threading.RLock()
         self.server: Optional[HttpServer] = None
 
@@ -77,8 +80,22 @@ class RefAgent:
         if req.method == "GET" and req.path == "/_debug/received":
             with self._lock:
                 return Response(
-                    200, {"received": self.received, "pushes_sent": self.pushes_sent}
+                    200,
+                    {
+                        "received": self.received,
+                        "pushes_sent": self.pushes_sent,
+                        "webhook": self.webhook,
+                    },
                 )
+        if req.method == "POST" and req.path == "/_webhook":
+            with self._lock:
+                self.webhook.append(
+                    {
+                        "token": req.headers.get("x-a2a-notification-token"),
+                        "event": req.json(),
+                    }
+                )
+            return Response(200, {})
         if req.method != "POST":
             return Response(404, {"error": "not_found"})
         if (
