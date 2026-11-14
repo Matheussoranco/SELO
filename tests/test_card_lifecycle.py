@@ -178,3 +178,16 @@ class ProcessRotationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CacheTest(unittest.TestCase):
+    def test_rejected_card_is_not_cached(self):
+        """Um par cujo Card foi recusado volta a ser aceito assim que corrige o problema."""
+        with InWorld() as w:
+            late = FakeClock(w.clock() - 3 * 3600)
+            a = w.node("a", clock=late, cfg={"card": {"validity": 3600}})
+            b = w.node("b")
+            self.assertEqual(error_code(b.send(a, "x")), "card_stale")
+            a.clock.t = w.clock()  # relogio corrigido
+            a.sc._card = None
+            self.assertNotIn("error", b.send(a, "logo em seguida"))

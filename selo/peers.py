@@ -85,6 +85,7 @@ class PeerDirectory:
         with self._lock:
             cached = self._cache.get(base)
         card = None
+        fetched = False
         if cached and not refresh and now - cached[1] < REFRESH:
             card = cached[0]
         if card is None:
@@ -92,14 +93,15 @@ class PeerDirectory:
                 status, body = self.http.json("GET", base + WELL_KNOWN)
                 if status != 200 or not isinstance(body, dict):
                     raise SeloError("card_unavailable", f"{base}: HTTP {status}")
-                card = body
-                with self._lock:
-                    self._cache[base] = (card, now)
+                card, fetched = body, True
             except SeloError:
                 if not cached:
                     raise
                 card = cached[0]  # ainda pode valer; verify_card decide
         info = self._verify(card, base, expected_id)
+        if fetched:  # so Cards que passaram na verificacao entram no cache
+            with self._lock:
+                self._cache[base] = (card, now)
         self.store.set_pin(info.agent_id, *info.pin())
         trust = self.policy.evaluate(info, now)
         return info, trust
