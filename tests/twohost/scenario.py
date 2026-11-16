@@ -28,7 +28,6 @@ import sys
 import tempfile
 import time
 import traceback
-import urllib.parse
 import uuid
 from pathlib import Path
 
@@ -344,11 +343,13 @@ def run(report: Report, work: Path) -> None:
         # 2. tarefa longa, GetTask e CancelTask (sessao)
         task = a.client.call(b.url, msg("lenta 3"))["result"]["task"]
         done = wait(
-            lambda: a.client.call(b.url, rpc("GetTask", id=task["id"]))
-            .get("result", {})
-            .get("status", {})
-            .get("state")
-            == "TASK_STATE_COMPLETED"
+            lambda: (
+                a.client.call(b.url, rpc("GetTask", id=task["id"]))
+                .get("result", {})
+                .get("status", {})
+                .get("state")
+                == "TASK_STATE_COMPLETED"
+            )
         )
         report.check("tarefa longa conclui (GetTask pela sessao)", bool(done))
         other = a.client.call(b.url, msg("lenta 100"))["result"]["task"]

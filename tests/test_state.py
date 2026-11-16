@@ -11,7 +11,7 @@ import unittest
 
 from selo.crypto.primitives import ed25519_priv, x25519_priv
 from selo.errors import SeloError
-from selo.keystore import DpapiKeyStore, FileKeyStore, open_keystore
+from selo.keystore import FileKeyStore, open_keystore
 from selo.sidecar import Sidecar
 from selo.store import SCHEMA_VERSION, Store
 from tests.e2e import World, send_message

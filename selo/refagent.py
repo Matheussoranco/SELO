@@ -56,9 +56,9 @@ class RefAgent:
         self.subscribers: Dict[str, List["queue.Queue"]] = {}
         self.received: List[Dict[str, Any]] = []
         self.pushes_sent: List[Dict[str, Any]] = []
-        self.webhook: List[Dict[str, Any]] = (
-            []
-        )  # notificacoes push recebidas por este agente
+        self.webhook: List[
+            Dict[str, Any]
+        ] = []  # notificacoes push recebidas por este agente
         self._lock = threading.RLock()
         self.server: Optional[HttpServer] = None
 
