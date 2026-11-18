@@ -14,7 +14,7 @@
     {
       "check": "SendMessage entre hosts",
       "ok": true,
-      "detail": "{\"id\": 1, \"jsonrpc\": \"2.0\", \"result\": {\"task\": {\"artifacts\": [{\"artifactId\": \"524e456b-7e2a-49a1-bb3c-49087efdcf11-out\", \"name\": \"saida\", \"parts\": [{\"text\": \"eco: ola, outro host\"}]}], \"contextId\": \"3"
+      "detail": "{\"id\": 1, \"jsonrpc\": \"2.0\", \"result\": {\"task\": {\"artifacts\": [{\"artifactId\": \"aca41f2e-eddb-4298-862b-44b39146b6e1-out\", \"name\": \"saida\", \"parts\": [{\"text\": \"eco: ola, outro host\"}]}], \"contextId\": \"4"
     },
     {
       "check": "tarefa longa conclui (GetTask pela sessao)",
@@ -44,7 +44,7 @@
     {
       "check": "rotacao de chaves de B",
       "ok": true,
-      "detail": "{\"id\": 1, \"jsonrpc\": \"2.0\", \"result\": {\"task\": {\"artifacts\": [{\"artifactId\": \"8cc19633-ce9b-45de-a8ad-26b88c6dbfb7-out\", \"name\": \"saida\", \"parts\": [{\"text\": \"eco: depois da rotacao\"}]}], \"contextId\": "
+      "detail": "{\"id\": 1, \"jsonrpc\": \"2.0\", \"result\": {\"task\": {\"artifacts\": [{\"artifactId\": \"5b71ff5c-42dc-4dfe-9300-f3b280bf2b1d-out\", \"name\": \"saida\", \"parts\": [{\"text\": \"eco: depois da rotacao\"}]}], \"contextId\": "
     },
     {
       "check": "replay de envelope rejeitado",
@@ -97,13 +97,14 @@
       "detail": ""
     }
   ],
-  "duration_s": 72.5,
+  "duration_s": 69.3,
   "environment": {
-    "date_utc": "2026-11-14T18:37:19Z",
+    "date_utc": "2026-11-18T20:06:22Z",
     "kernel": "6.18.58.1-microsoft-standard-WSL2",
     "os": "Linux-6.18.58.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
     "python": "3.12.3",
-    "cryptography": "41.0.7",
-    "topology": "3 network namespaces: host-a 10.10.1.2/24, router, host-b 10.10.2.2/24; HTTPS with a test CA"
+    "cryptography": "46.0.7",
+    "topology": "3 network namespaces: host-a 10.10.1.2/24, router, host-b 10.10.2.2/24; HTTPS with a test CA",
+    "git_revision": "62a7b7864dd4fee67b9787cf87dde4b0930e62b3"
   }
 }
