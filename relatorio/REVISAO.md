@@ -29,7 +29,7 @@ Foram inspecionados os módulos principais do SELO, CLI, empacotamento, testes, 
 | Trocar de sessão é solução para bloqueio | Só é válido com contexto realmente independente; transferir conteúdo sem seus carimbos contorna a hipótese de segurança | `Session`, `Agent.call`, `audit_traffic` |
 | Linter MCP pode examinar executável desconhecido com segurança | Inicia subprocesso antes da análise, sem isolamento, herdando ambiente por padrão | `mcp_bridge.py:McpStdioClient.start`, CLI `_lint`/`main` |
 
-Os caminhos da coluna de evidência são relativos a `../cripto_agent/selo/`, exceto a CLI (`../cripto_agent/__main__.py`).
+Os caminhos da coluna de evidência são relativos a `../selo_v0/`, exceto a CLI (`../selo_v0/__main__.py`).
 
 ## Resultados e validação
 

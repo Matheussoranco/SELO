@@ -35,10 +35,10 @@ from typing import Any, Dict, Optional
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import cripto_agent.selo.envelope as _envelope  # noqa: E402
-from cripto_agent.selo import RemoteError, Session  # noqa: E402
-from cripto_agent.selo.manifest import new_manifest  # noqa: E402
-from cripto_agent.selo.sandbox import World  # noqa: E402
+import selo_v0.envelope as _envelope  # noqa: E402
+from selo_v0 import RemoteError, Session  # noqa: E402
+from selo_v0.manifest import new_manifest  # noqa: E402
+from selo_v0.sandbox import World  # noqa: E402
 
 _envelope.MAX_BODY = 16 << 20            # saidas de tools do AgentDojo podem ser grandes
 _envelope.MAX_ENVELOPE = 32 << 20

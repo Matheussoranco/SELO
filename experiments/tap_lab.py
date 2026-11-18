@@ -20,9 +20,9 @@ from pathlib import Path
 warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from cripto_agent.selo import Session  # noqa: E402
-from cripto_agent.selo.sandbox import World  # noqa: E402
-from cripto_agent.selo.transport import OrgClient, http_send, serve_agent, serve_org  # noqa: E402
+from selo_v0 import Session  # noqa: E402
+from selo_v0.sandbox import World  # noqa: E402
+from selo_v0.transport import OrgClient, http_send, serve_agent, serve_org  # noqa: E402
 
 AMOUNT = {"invoice": "INV-1", "amount_cents": 1000}
 

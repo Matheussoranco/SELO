@@ -8,4 +8,4 @@ if [ ! -x .venv/bin/python ]; then
     python3 -m venv .venv
     .venv/bin/python -m pip install -q -e .
 fi
-exec .venv/bin/python -m cripto_agent demo "$@"
+exec .venv/bin/python -m selo_v0 demo "$@"

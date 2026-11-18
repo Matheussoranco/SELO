@@ -16,15 +16,15 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from cripto_agent.selo import RemoteError, SeloError, Session  # noqa: E402
-from cripto_agent.selo.audit import audit_traffic  # noqa: E402
-from cripto_agent.selo.envelope import open_envelope, seal  # noqa: E402
-from cripto_agent.selo.manifest import (manifest_hash, new_manifest, org_countersign,  # noqa: E402
+from selo_v0 import RemoteError, SeloError, Session  # noqa: E402
+from selo_v0.audit import audit_traffic  # noqa: E402
+from selo_v0.envelope import open_envelope, seal  # noqa: E402
+from selo_v0.manifest import (manifest_hash, new_manifest, org_countersign,  # noqa: E402
                                         publisher_sign)
-from cripto_agent.selo.provenance import make_stamp  # noqa: E402
-from cripto_agent.selo.sandbox import World  # noqa: E402
-from cripto_agent.selo.tokens import Token  # noqa: E402
-from cripto_agent.selo.util import b64d  # noqa: E402
+from selo_v0.provenance import make_stamp  # noqa: E402
+from selo_v0.sandbox import World  # noqa: E402
+from selo_v0.tokens import Token  # noqa: E402
+from selo_v0.util import b64d  # noqa: E402
 
 MAL = "https://noticias.example/maliciosa"
 PAY = {"invoice": "INV-999", "amount_cents": 900000}
@@ -116,10 +116,10 @@ def _(lab):
 
 @attack("autenticidade", "agente sem certificado da organização")
 def _(lab):
-    from cripto_agent.selo.org import Organization
+    from selo_v0.org import Organization
     rogue = Organization.create("acme", clock=lab.w.clock)
     from cryptography.hazmat.primitives.asymmetric import ed25519
-    from cripto_agent.selo.keys import pub_raw
+    from selo_v0.keys import pub_raw
     sk = ed25519.Ed25519PrivateKey.generate()
     cert = rogue.enroll("assistant", pub_raw(sk.public_key()), ["agent"])
     lab.erp.handle(lab.sealed(key=sk, cert=cert))
@@ -240,7 +240,7 @@ def _(lab):
 
 @attack("cadeia de suprimento", "publicador sem papel 'publisher'")
 def _(lab):
-    from cripto_agent.selo.manifest import verify_manifest_doc
+    from selo_v0.manifest import verify_manifest_doc
     lab.w.new_publisher("pub-x")
     lab.w.org.agents["pub-x"]["roles"] = ["agent"]
     v1 = lab.web.catalog()[0]
@@ -283,7 +283,7 @@ def _(lab):
 @attack("injeção de prompt", "host malicioso rotula saída da web como limpa")
 def _(lab):
     s = lab.session()
-    with mock.patch("cripto_agent.selo.agent.make_stamp", lambda **kw: make_stamp(**dict(kw, taint=()))):
+    with mock.patch("selo_v0.agent.make_stamp", lambda **kw: make_stamp(**dict(kw, taint=()))):
         lab.call("web", "web.fetch", {"url": MAL}, lab.fetch, s)
     lab.call("erp", "erp.pay_invoice", PAY, lab.pay, s)
 
@@ -330,7 +330,7 @@ def _(lab):
 @attack("auditoria", "host omite contaminação ao carimbar (detecção a posteriori)")
 def _(lab):
     s = lab.session()
-    with mock.patch("cripto_agent.selo.agent.make_stamp", lambda **kw: make_stamp(**dict(kw, taint=()))):
+    with mock.patch("selo_v0.agent.make_stamp", lambda **kw: make_stamp(**dict(kw, taint=()))):
         lab.call("web", "web.fetch", {"url": MAL}, lab.fetch, s)
     if audit_traffic(lab.w.org, lab.w.traffic, "ciso", "teste")["propagation"]:
         raise SeloError("detected_by_audit")
