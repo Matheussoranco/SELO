@@ -98,7 +98,7 @@ A configuração do sidecar recebe `"org": {"descriptor": ..., "attestation": ..
 | Interoperabilidade com o `a2a-sdk` 1.3.0 | O agente servidor do SDK atrás do SELO, o cliente do SDK pelo canal local, o SDK lendo o Agent Card do SELO e o erro definido para clientes sem a extensão. Todos passam |
 | Dois hosts em redes separadas, com falhas injetadas ([`docs/validacao/duas-maquinas.json`](docs/validacao/duas-maquinas.json)) | **19 de 19 verificações**. Ver abaixo |
 
-**Dois hosts** (`tests/twohost/scenario.py`, 14/11/2026). Três namespaces de rede do Linux, o mesmo isolamento usado por contêineres: host-a `10.10.1.2/24`, roteador, host-b `10.10.2.2/24`. O ambiente foi a WSL2 (kernel 6.18.58.1), com HTTPS sob uma CA de teste e uma organização com lista de revogação servida do host-a. O roteiro verificou o seguinte:
+**Dois hosts** (`tests/twohost/scenario.py`, 18/11/2026). A reexecução usou Python 3.12.3 e `cryptography` 46.0.7, dentro da faixa de dependências do projeto. O relatório registra a revisão testada. Três namespaces de rede no mesmo kernel WSL2 (6.18.58.1) isolaram host-a `10.10.1.2/24`, roteador e host-b `10.10.2.2/24`. O cenário usou HTTPS sob uma CA de teste e uma lista de revogação servida do host-a. O roteiro verificou o seguinte:
 
 * mensagem, tarefa longa, cancelamento, streaming SSE e push entre os hosts;
 * rotação de chaves;
@@ -106,14 +106,14 @@ A configuração do sidecar recebe `"org": {"descriptor": ..., "attestation": ..
 * mensagem de sessão antiga (reordenada) e adulterada rejeitadas;
 * relógio adiantado em 10 min rejeitado. O código observado foi `revocations_stale`: a lista de revogação parece vencida para quem está adiantado, e essa checagem vem antes da janela do envelope;
 * Card vencido derruba a conexão (`card_stale`), e o par se recupera ao corrigir o relógio;
-* lista de revogação indisponível ou vencida leva a falha fechada;
+* lista de revogação vencida que não pôde ser atualizada: a conexão falha fechada;
 * agente revogado pela organização rejeitado (`peer_revoked`);
 * as capturas de rede não contêm texto claro.
 
 **O que NÃO foi validado:**
 
 * **Máquinas físicas distintas ou internet real.** Os "dois hosts" são namespaces de rede no mesmo kernel; isso prova a separação de pilhas de rede e o roteamento, não latência, NAT ou firewalls reais. Agentes atrás de NAT não são suportados na v1 (não há relay).
-* **Modelo formal:** o modelo ProVerif do handshake ([`docs/formal/`](docs/formal/README.md)) foi escrito, mas **não foi executado**. As propriedades listadas lá são análise manual, não prova.
+* **Modelo formal:** a execução do modelo do handshake no ProVerif 2.05 ([`docs/formal/`](docs/formal/README.md)) atingiu o limite de tempo sem emitir nenhum veredito. As propriedades listadas lá são análise manual, não prova.
 * **Cofres Keychain (macOS) e Secret Service (Linux):** implementados pela interface das ferramentas do sistema, nunca executados. DPAPI e o cofre em arquivo são testados.
 * Nenhuma auditoria criptográfica independente. Sem medição de desempenho, sem proteção contra negação de serviço, sem resistência a canais laterais de tempo.
 

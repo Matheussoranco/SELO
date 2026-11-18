@@ -2,14 +2,11 @@
 
 `noise_ik_selo.pv` modela em ProVerif o handshake de sessão do SELO, `Noise_IK_25519_ChaChaPoly_SHA256`, seguido da derivação da raiz do ratchet (especificação, seção 9). O atacante é Dolev-Yao, cobrindo os adversários A1 e A2 do [modelo de ameaça](../spec/modelo-de-ameaca.md): lê, altera, repete e injeta mensagens, tem identidade própria e abre sessões com os agentes honestos. Na fase 1, as chaves estáticas dos dois agentes honestos vazam, para testar o sigilo progressivo.
 
-## Status: modelo escrito, verificação NÃO executada
+## Status: execução inconclusiva
 
-O modelo não foi verificado nesta sessão de desenvolvimento. Os motivos:
+Em 18/11/2026, às 20:19:23 UTC, o binário oficial do ProVerif 2.05 para Windows foi executado sobre o modelo da revisão `62a7b7864dd4fee67b9787cf87dde4b0930e62b3`. O arquivo `proverifbin2.05.tar.gz` usado tinha SHA-256 `7b402ce05343e8819c8f05b871105c06d96d5c86556035fa3db4ad24c0820a32`.
 
-* a WSL da máquina de desenvolvimento estava sem DNS, então `apt install proverif` não pôde ser instalado;
-* o binário oficial para Windows (`proverifbin2.05.tar.gz`, do site da INRIA, SHA-256 `7b402ce0…0a32`) foi baixado, mas a execução de um binário baixado foi bloqueada pela política de permissões da sessão.
-
-Portanto, **nenhuma das propriedades abaixo está provada por ferramenta até alguém rodar o modelo.** A coluna "esperado" registra o que a análise manual prevê, não um resultado.
+Após 180 segundos, a execução foi interrompida por tempo limite (código 124 do executor), ainda durante a saturação: a última linha do log registrava 18.200 regras inseridas. O verificador não emitiu nenhuma linha `RESULT`. **Q1–Q7 continuam sem veredito.** O tempo limite não é prova, refutação ou demonstração de que o modelo nunca termina. A coluna "esperado" registra a análise manual, não um resultado do verificador.
 
 ## Como rodar
 
