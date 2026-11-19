@@ -148,11 +148,16 @@ def open_envelope(
     replay: Callable[[str, str, int], None],
     escrow_org: Callable[[CardInfo], Optional[str]] = lambda _c: None,
     expect_type: Optional[str] = None,
+    get_cached_sender_key: Optional[Callable[[Dict[str, Any]], Optional[bytes]]] = None,
 ) -> Opened:
     """Verifica e decifra na ordem da especificacao (8.3). Qualquer falha levanta SeloError.
 
     `resolve_sender(h)` busca, verifica e aplica a politica de confianca ao Card do remetente.
-    `replay(sender, msg, exp)` levanta `replay` se o par ja foi visto (e o registra)."""
+    `replay(sender, msg, exp)` levanta `replay` se o par ja foi visto (e o registra).
+    `get_cached_sender_key(h)` opcional: retorna a chave de assinatura do remetente a partir
+    do cache local (sem busca de rede) para verificar a assinatura ANTES de buscar o Card.
+    Se retorna None (ex.: TOFU), o comportamento atual e mantido: busca o Card primeiro.
+    """
     h = peek(env)
     if expect_type is not None and h["t"] != expect_type:
         raise SeloError("bad_envelope", "tipo inesperado")
@@ -160,22 +165,46 @@ def open_envelope(
         raise SeloError("wrong_recipient")
     agree_sk = me.agree_key_for(h["recipient_seq"], now)
     check_lifetime(h, now)
+
+    # Tenta verificar a assinatura com chave em cache ANTES de buscar o Card (secao 8.3, ordem 5 antes de 4 para agentes conhecidos)
+    cached_sig_pub = None
+    if get_cached_sender_key is not None:
+        cached_sig_pub = get_cached_sender_key(h)
+
+    if cached_sig_pub is not None:
+        # Verifica a assinatura com a chave em cache ANTES de buscar o Card
+        capsule = env.get("escrow")
+        aad = jcs.canonicalize(h)
+        enc, ct = unb64u(env["enc"]), unb64u(env["ct"])
+        if len(ct) > MAX_BODY:
+            raise SeloError("body_too_large")
+        if not ed25519_verify(
+            cached_sig_pub,
+            unb64u(env["sig"]),
+            SIG_DOMAIN + sha256(aad) + enc + sha256(ct) + capsule_digest(capsule),
+        ):
+            raise SeloError("bad_signature")
+
     sender = resolve_sender(h)
     if sender.agent_id != h["sender"]:
         raise SeloError("identity_mismatch")
     if not sender.kel.key_usable(h["sender_seq"], now, h["iat"]):
         raise SeloError("bad_signature", "chave do remetente fora da janela")
-    capsule = env.get("escrow")
-    aad = jcs.canonicalize(h)
-    enc, ct = unb64u(env["enc"]), unb64u(env["ct"])
-    if len(ct) > MAX_BODY:
-        raise SeloError("body_too_large")
-    if not ed25519_verify(
-        sender.kel.entry(h["sender_seq"]).sig_pub,
-        unb64u(env["sig"]),
-        SIG_DOMAIN + sha256(aad) + enc + sha256(ct) + capsule_digest(capsule),
-    ):
-        raise SeloError("bad_signature")
+
+    # Se nao verificamos com chave em cache, verifica agora com a chave do Card resolvido
+    if cached_sig_pub is None:
+        capsule = env.get("escrow")
+        aad = jcs.canonicalize(h)
+        enc, ct = unb64u(env["enc"]), unb64u(env["ct"])
+        if len(ct) > MAX_BODY:
+            raise SeloError("body_too_large")
+        if not ed25519_verify(
+            sender.kel.entry(h["sender_seq"]).sig_pub,
+            unb64u(env["sig"]),
+            SIG_DOMAIN + sha256(aad) + enc + sha256(ct) + capsule_digest(capsule),
+        ):
+            raise SeloError("bad_signature")
+
     replay(h["sender"], h["msg"], h["exp"])
     org = escrow_org(sender)
     if org is not None:

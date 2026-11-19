@@ -291,27 +291,33 @@ class Sidecar:
         return self.orgs.escrow_target(org) if org else None
 
     def open_incoming(
-        self, env: Any, expect_type: str, expected_sender: Optional[str] = None
-    ) -> Tuple[envelope.Opened, PeerTrust]:
-        trusts: Dict[str, PeerTrust] = {}
+            self, env: Any, expect_type: str, expected_sender: Optional[str] = None
+        ) -> Tuple[envelope.Opened, PeerTrust]:
+            trusts: Dict[str, PeerTrust] = {}
 
-        def resolve(h: Dict[str, Any]) -> CardInfo:
-            if expected_sender is not None and h["sender"] != expected_sender:
-                raise SeloError("identity_mismatch", "resposta de outro agente")
-            info, trust = self.resolve_sender(h)
-            trusts["t"] = trust
-            return info
+            def resolve(h: Dict[str, Any]) -> CardInfo:
+                if expected_sender is not None and h["sender"] != expected_sender:
+                    raise SeloError("identity_mismatch", "resposta de outro agente")
+                info, trust = self.resolve_sender(h)
+                trusts["t"] = trust
+                return info
 
-        opened = envelope.open_envelope(
-            env,
-            me=self.identity,
-            now=self.clock(),
-            resolve_sender=resolve,
-            replay=lambda s, m, exp: self.store.check_replay(s, m, exp, self.clock()),
-            escrow_org=lambda _info: self.escrow_org_for(trusts["t"]),
-            expect_type=expect_type,
-        )
-        return opened, trusts["t"]
+            def get_cached_key(h: Dict[str, Any]) -> Optional[bytes]:
+                return self.peers.get_cached_sender_key(
+                    h["sender"], h["sender_card"], h["sender_seq"]
+                )
+
+            opened = envelope.open_envelope(
+                env,
+                me=self.identity,
+                now=self.clock(),
+                resolve_sender=resolve,
+                replay=lambda s, m, exp: self.store.check_replay(s, m, exp, self.clock()),
+                escrow_org=lambda _info: self.escrow_org_for(trusts["t"]),
+                expect_type=expect_type,
+                get_cached_sender_key=get_cached_key,
+            )
+            return opened, trusts["t"]
 
     def handle_envelope(self, req: Request) -> Response:
         env = req.json()

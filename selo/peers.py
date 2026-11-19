@@ -109,3 +109,29 @@ class PeerDirectory:
     def forget(self, url: str) -> None:
         with self._lock:
             self._cache.pop(normalize_base(url), None)
+
+    def get_cached_sender_key(
+        self, sender_id: str, sender_card_url: str, sender_seq: int
+    ) -> Optional[bytes]:
+        """
+        Retorna a chave de assinatura do remetente a partir do cache, sem busca de rede.
+        Usado para verificar a assinatura do envelope ANTES de buscar o Card fresco.
+        """
+        base = normalize_base(sender_card_url)
+        with self._lock:
+            cached = self._cache.get(base)
+        if cached is None:
+            return None
+        card, _ = cached
+        try:
+            info = verify_card(
+                card,
+                now=self.clock(),
+                max_card_age=self.max_card_age,
+                expected_id=sender_id,
+            )
+            if info.kel.seq != sender_seq:
+                return None
+            return info.kel.current.sig_pub
+        except SeloError:
+            return None
