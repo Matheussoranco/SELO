@@ -35,7 +35,18 @@ from .crypto.ratchet import open_with
 from .errors import SeloError
 from .escrow import EscrowTarget, capsule_digest, open_capsule
 from .net import HttpClient, HttpServer, Request, Response
-from .shamir import combine, random_secret, split
+try:
+    from .optional.shamir import combine, random_secret, split
+except ImportError:
+    combine = split = None
+    def random_secret() -> bytes:
+        """Segredo uniforme em [0, 2^256) usando rejeicao."""
+        import secrets
+        P = 2**256 - 189
+        while True:
+            value = secrets.randbelow(2**256)
+            if value < P:
+                return value.to_bytes(32, "big")
 
 REVOCATIONS_DEFAULT = 3600
 REVOCATIONS_MAX = 24 * 3600
@@ -170,10 +181,14 @@ class Organization:
         )
 
     def master_shares(self, threshold: int, shares: int) -> List[Tuple[int, str]]:
+        if split is None:
+            raise SeloError("not_supported", "Shamir secret sharing nao disponivel")
         return [(x, b64u(y)) for x, y in split(self.master, threshold, shares)]
 
     @staticmethod
     def master_from_shares(parts: List[Tuple[int, str]]) -> bytes:
+        if combine is None:
+            raise SeloError("not_supported", "Shamir secret sharing nao disponivel")
         return combine([(x, unb64u(y)) for x, y in parts])
 
     # -- auditoria (escrow) ---------------------------------------------------------------
@@ -534,7 +549,9 @@ def run_cli(a: Any) -> int:
         org.save_state(a.dir)
         print(json.dumps(org.revocation_list(now), indent=2))
     elif a.org_cmd == "shares":
-        print(json.dumps(org.master_shares(a.threshold, a.count), indent=2))
+            if split is None or combine is None:
+                raise SeloError("not_supported", "Shamir secret sharing nao disponivel; instale modulo optional")
+            print(json.dumps(org.master_shares(a.threshold, a.count), indent=2))
     elif a.org_cmd == "audit":
         with open(a.capture, encoding="utf-8") as fh:
             records = [json.loads(line) for line in fh if line.strip()]
