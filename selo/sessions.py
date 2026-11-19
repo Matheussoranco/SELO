@@ -262,23 +262,28 @@ class SessionManager:
         return resp
 
     def call(
-        self, info: CardInfo, trust: PeerTrust, rpc: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        s = self._session_for(info)
-        if channel.choose(rpc["method"], s is not None) == channel.ENVELOPE:
-            resp = self.sc.call_envelope(info, trust, rpc)
-            self._try_open_session(info)
-            return resp
-        try:
-            return self._post(s, info, trust, rpc)
-        except SeloError as e:
-            if e.code != "unknown_session":
-                raise
-            self._drop(s.sid)
-        # recuo (9.5): a requisicao nao foi processada; reenvia por envelope
-        resp = self.sc.call_envelope(info, trust, rpc)
-        self._try_open_session(info)
-        return resp
+            self, info: CardInfo, trust: PeerTrust, rpc: Dict[str, Any]
+        ) -> Dict[str, Any]:
+            for attempt in (1, 2):
+                s = self._session_for(info)
+                if channel.choose(rpc["method"], s is not None) == channel.ENVELOPE:
+                    resp = self.sc.call_envelope(info, trust, rpc)
+                    self._try_open_session(info)
+                    return resp
+                try:
+                    return self._post(s, info, trust, rpc)
+                except SeloError as e:
+                    if e.code != "unknown_session":
+                        raise
+                    self._drop(s.sid)
+                    if attempt == 1:
+                        continue  # recuo: novo handshake ou envelope
+                    # Segunda tentativa: recuo para envelope
+                    resp = self.sc.call_envelope(info, trust, rpc)
+                    self._try_open_session(info)
+                    return resp
+            # Nao alcancavel: o loop retorna ou levanta
+            raise SeloError("peer_error", "call failed after retries")
 
     def _try_open_session(self, info: CardInfo) -> None:
         try:
