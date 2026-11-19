@@ -190,43 +190,41 @@ class LocalServer:
         return hmac.compare_digest(got.encode(), f"Bearer {self._token}".encode())
 
     def _handle_http(self, req: Request) -> Response:
-        if not self._authorized(req):
-            return Response(401, {"error": "unauthorized"})
-        parts = req.path.split("/")
-        if req.method == "GET" and req.path == "/whoami":
-            return Response(200, self.api.whoami())
-        if len(parts) >= 3 and parts[1] == "peers":
-            peer = urllib.parse.unquote(parts[2])
-            rest = "/" + "/".join(parts[3:])
-            local_url = f"{self.info['url']}/peers/{parts[2]}"
-            if req.method == "GET" and rest == WELL_KNOWN:
-                try:
-                    return Response(200, self.api.peer_card(peer, local_url))
-                except SeloError as e:
-                    return Response(502, {"error": e.code})
-            if req.method == "POST" and rest in ("/", ""):
-                try:
-                    rpc = req.json()
-                except SeloError:
-                    return Response(
-                        200,
-                        {
-                            "jsonrpc": "2.0",
-                            "id": None,
-                            "error": {"code": -32700, "message": "parse error"},
-                        },
-                    )
-                from .channel import is_streaming
+            if not self._authorized(req):
+                return Response(401, {"error": "unauthorized"})
+            parts = req.path.split("/")
+            if len(parts) >= 3 and parts[1] == "peers":
+                peer = urllib.parse.unquote(parts[2])
+                rest = "/" + "/".join(parts[3:])
+                local_url = f"{self.info['url']}/peers/{parts[2]}"
+                if req.method == "GET" and rest == WELL_KNOWN:
+                    try:
+                        return Response(200, self.api.peer_card(peer, local_url))
+                    except SeloError as e:
+                        return Response(502, {"error": e.code})
+                if req.method == "POST" and rest in ("/", ""):
+                    try:
+                        rpc = req.json()
+                    except SeloError:
+                        return Response(
+                            200,
+                            {
+                                "jsonrpc": "2.0",
+                                "id": None,
+                                "error": {"code": -32700, "message": "parse error"},
+                            },
+                        )
+                    from .channel import is_streaming
 
-                if isinstance(rpc, dict) and is_streaming(str(rpc.get("method"))):
-                    events = self.api.stream(peer, rpc)
-                    return Response(
-                        200,
-                        content_type="text/event-stream",
-                        stream=(sse_event(json.dumps(ev)) for ev in events),
-                    )
-                return Response(200, self.api.call(peer, rpc))
-        return Response(404, {"error": "not_found"})
+                    if isinstance(rpc, dict) and is_streaming(str(rpc.get("method"))):
+                        events = self.api.stream(peer, rpc)
+                        return Response(
+                            200,
+                            content_type="text/event-stream",
+                            stream=(sse_event(json.dumps(ev)) for ev in events),
+                        )
+                    return Response(200, self.api.call(peer, rpc))
+            return Response(404, {"error": "not_found"})
 
 
 class LocalClient:
@@ -326,14 +324,9 @@ class LocalClient:
         return self._check(self._roundtrip({"op": "card", "peer": peer}))["card"]
 
     def whoami(self) -> Dict[str, Any]:
-        if self.mode == "http":
-            return self._http.json(
-                "GET",
-                f"{self.info['url']}/whoami",
-                None,
-                {"Authorization": f"Bearer {self._token}"},
-            )[1]
-        return self._check(self._roundtrip({"op": "whoami"}))["whoami"]
+            if self.mode == "http":
+                raise SeloError("not_supported", "whoami nao disponivel no modo HTTP; use pipe/unix")
+            return self._check(self._roundtrip({"op": "whoami"}))["whoami"]
 
 
 Callback = Callable[..., Any]

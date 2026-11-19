@@ -134,10 +134,10 @@ class LocalHttpModeTest(unittest.TestCase):
             self.assertEqual(
                 resp["result"]["task"]["status"]["state"], "TASK_STATE_COMPLETED"
             )
-            url = a.info["local"]["url"] + "/whoami"
-            with self.assertRaises(urllib.error.HTTPError) as cm:
-                urllib.request.urlopen(url, timeout=10)
-            self.assertEqual(cm.exception.code, 401)
+            # whoami nao disponivel no modo HTTP (fora do spec)
+            with self.assertRaises(SeloError) as cm:
+                a.client.whoami()
+            self.assertEqual(cm.exception.code, "not_supported")
             bad = LocalClient(info=a.info["local"])
             bad._token = "errado"
             with self.assertRaises(SeloError):
