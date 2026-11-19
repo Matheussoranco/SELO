@@ -10,7 +10,7 @@ import json
 import os
 import sqlite3
 import threading
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .crypto.primitives import aead_open, aead_seal
 from .errors import SeloError
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS push_in (id TEXT PRIMARY KEY, dest_url TEXT NOT NULL,
 
 class Store:
     def __init__(
-        self, path: str = ":memory:", data_key: Optional[bytes] = None
+        self, path: str = ":memory:", data_key: bytes | None = None
     ) -> None:
         if path != ":memory:":
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
@@ -87,7 +87,7 @@ class Store:
                 raise SeloError("replay", f"{sender}/{msg}") from None
 
     # -- fixacoes -------------------------------------------------------------------------
-    def get_pin(self, agent_id: str) -> Optional[Tuple[int, str]]:
+    def get_pin(self, agent_id: str) -> tuple[int, str] | None:
         with self._lock:
             row = self._db.execute(
                 "SELECT seq, head FROM pins WHERE agent_id=?", (agent_id,)
@@ -103,7 +103,7 @@ class Store:
             )
 
     # -- sessoes (estado cifrado) ---------------------------------------------------------
-    def _seal(self, sid: str, data: Dict[str, Any]) -> bytes:
+    def _seal(self, sid: str, data: dict[str, Any]) -> bytes:
         nonce = os.urandom(12)
         return nonce + aead_seal(
             self._data_key,
@@ -112,7 +112,7 @@ class Store:
             json.dumps(data).encode(),
         )
 
-    def _open(self, sid: str, blob: bytes) -> Dict[str, Any]:
+    def _open(self, sid: str, blob: bytes) -> dict[str, Any]:
         return json.loads(
             aead_open(
                 self._data_key, blob[:12], b"selo/1/state\x00" + sid.encode(), blob[12:]
@@ -126,7 +126,7 @@ class Store:
         peer_url: str,
         role: str,
         exp: int,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ) -> None:
         with self._lock:
             self._db.execute(
@@ -137,7 +137,7 @@ class Store:
 
     def load_session(
         self, sid: str
-    ) -> Optional[Tuple[str, str, str, int, Dict[str, Any]]]:
+    ) -> tuple[str, str, str, int, dict[str, Any]] | None:
         with self._lock:
             row = self._db.execute(
                 "SELECT peer_id, peer_url, role, exp, blob FROM sessions WHERE sid=?",
@@ -147,7 +147,7 @@ class Store:
             return None
         return row[0], row[1], row[2], row[3], self._open(sid, row[4])
 
-    def find_initiator_session(self, peer_id: str, now: float) -> Optional[str]:
+    def find_initiator_session(self, peer_id: str, now: float) -> str | None:
         with self._lock:
             row = self._db.execute(
                 "SELECT sid FROM sessions WHERE peer_id=? AND role='i' AND exp>? "
@@ -164,7 +164,7 @@ class Store:
         with self._lock:
             self._db.execute("DELETE FROM sessions WHERE exp<=?", (int(now),))
 
-    def raw_session_blobs(self) -> List[bytes]:
+    def raw_session_blobs(self) -> list[bytes]:
         with self._lock:
             return [r[0] for r in self._db.execute("SELECT blob FROM sessions")]
 
@@ -176,7 +176,7 @@ class Store:
                 (ref, webhook, server_id, int(now)),
             )
 
-    def get_push_out(self, ref: str) -> Optional[Tuple[str, str]]:
+    def get_push_out(self, ref: str) -> tuple[str, str] | None:
         with self._lock:
             row = self._db.execute(
                 "SELECT webhook, server_id FROM push_out WHERE ref=?", (ref,)
@@ -199,7 +199,7 @@ class Store:
                 (pid, dest_url, dest_id, ref, token, peer_id, int(now)),
             )
 
-    def get_push_in(self, pid: str) -> Optional[Dict[str, str]]:
+    def get_push_in(self, pid: str) -> dict[str, str] | None:
         with self._lock:
             row = self._db.execute(
                 "SELECT dest_url, dest_id, ref, token, peer_id FROM push_in WHERE id=?",

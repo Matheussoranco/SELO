@@ -43,7 +43,7 @@ class LintTests(unittest.TestCase):
         self.assertNotIn("SELO002", rules(lint_manifest(ok)))
 
     def test_invisible_characters_and_instruction_like_descriptions(self):
-        m = new_manifest("add", "tool", "Soma dois numeros.​", SCHEMA, "p")
+        m = new_manifest("add", "tool", "Soma dois numeros.\u200b", SCHEMA, "p")
         self.assertIn("SELO003", rules(lint_manifest(m)))
         poisoned = new_manifest(
             "add",

@@ -11,8 +11,9 @@ from __future__ import annotations
 import json
 import os
 import threading
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, Optional
+from typing import Any
 
 from . import PROTOCOL, channel, jcs
 from .card import CLOCK_SKEW, CardInfo
@@ -55,16 +56,16 @@ def prologue(responder: str, responder_seq: int) -> bytes:
     )
 
 
-def _ad_base(sid: str, direction: str, hdr: Dict[str, Any]) -> bytes:
+def _ad_base(sid: str, direction: str, hdr: dict[str, Any]) -> bytes:
     return jcs.canonicalize({"sid": sid, "dir": direction}) + jcs.canonicalize(hdr)
 
 
 class SessionManager:
     def __init__(self, sidecar: Any) -> None:
         self.sc = sidecar
-        self._live: Dict[str, Session] = {}
+        self._live: dict[str, Session] = {}
         self._lock = threading.Lock()
-        self._hs_locks: Dict[str, threading.Lock] = {}
+        self._hs_locks: dict[str, threading.Lock] = {}
 
     # -- persistencia ---------------------------------------------------------------------
     def _save(self, s: Session) -> None:
@@ -81,7 +82,7 @@ class SessionManager:
             },
         )
 
-    def _load(self, sid: str) -> Optional[Session]:
+    def _load(self, sid: str) -> Session | None:
         with self._lock:
             s = self._live.get(sid)
             if s is not None:
@@ -110,8 +111,8 @@ class SessionManager:
 
     # -- mensagens de sessao --------------------------------------------------------------
     def seal(
-        self, s: Session, payload: Dict[str, Any], trust: PeerTrust
-    ) -> Dict[str, Any]:
+        self, s: Session, payload: dict[str, Any], trust: PeerTrust
+    ) -> dict[str, Any]:
         with s.lock:
             hdr, mk = s.ratchet.next_send()
             base = _ad_base(s.sid, s.send_dir, hdr)
@@ -121,12 +122,12 @@ class SessionManager:
                 mk, base + capsule_digest(capsule), jcs.canonicalize(payload)
             )
             self._save(s)
-        msg: Dict[str, Any] = {"sid": s.sid, "hdr": hdr, "ct": b64u(ct)}
+        msg: dict[str, Any] = {"sid": s.sid, "hdr": hdr, "ct": b64u(ct)}
         if capsule is not None:
             msg["escrow"] = capsule
         return msg
 
-    def open(self, s: Session, msg: Any, trust: PeerTrust) -> Dict[str, Any]:
+    def open(self, s: Session, msg: Any, trust: PeerTrust) -> dict[str, Any]:
         if not isinstance(msg, dict) or not (
             MSG_FIELDS <= set(msg) <= MSG_FIELDS | {"escrow"}
         ):
@@ -206,7 +207,7 @@ class SessionManager:
             info.base_url,
             "i",
             min(exp, int(now) + int(sc.cfg["session_ttl"])),
-            Ratchet.init_alice(sk, hs.re),
+            Ratchet.init_alice(sk, hs.re, max_stored=int(self.sc.cfg.get("max_stored", 1024))),
             info.kel.seq,
             sc.identity.seq,
         )
@@ -215,7 +216,7 @@ class SessionManager:
         self._save(s)
         return s
 
-    def _session_for(self, info: CardInfo) -> Optional[Session]:
+    def _session_for(self, info: CardInfo) -> Session | None:
         sid = self.sc.store.find_initiator_session(info.agent_id, self.sc.clock())
         if sid is None:
             return None
@@ -237,8 +238,8 @@ class SessionManager:
             return s if s is not None else self.handshake(info)
 
     def _post(
-        self, s: Session, info: CardInfo, trust: PeerTrust, rpc: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, s: Session, info: CardInfo, trust: PeerTrust, rpc: dict[str, Any]
+    ) -> dict[str, Any]:
         msg = self.seal(s, {"rpc": rpc}, trust)
         self.sc.capture("out", "session", msg)
         status, body = self.sc.http.json(
@@ -262,8 +263,8 @@ class SessionManager:
         return resp
 
     def call(
-            self, info: CardInfo, trust: PeerTrust, rpc: Dict[str, Any]
-        ) -> Dict[str, Any]:
+            self, info: CardInfo, trust: PeerTrust, rpc: dict[str, Any]
+        ) -> dict[str, Any]:
             for attempt in (1, 2):
                 s = self._session_for(info)
                 if channel.choose(rpc["method"], s is not None) == channel.ENVELOPE:
@@ -292,8 +293,8 @@ class SessionManager:
             pass  # a proxima chamada tenta de novo; o envelope ja funcionou
 
     def stream(
-        self, info: CardInfo, trust: PeerTrust, rpc: Dict[str, Any]
-    ) -> Iterator[Dict[str, Any]]:
+        self, info: CardInfo, trust: PeerTrust, rpc: dict[str, Any]
+    ) -> Iterator[dict[str, Any]]:
         for attempt in (1, 2):
             s = self._ensure_session(info)
             msg = self.seal(s, {"rpc": rpc}, trust)
@@ -321,7 +322,7 @@ class SessionManager:
 
     def _read_stream(
         self, s: Session, r: Any, trust: PeerTrust
-    ) -> Iterator[Dict[str, Any]]:
+    ) -> Iterator[dict[str, Any]]:
         expected = 0
         try:
             for data in r.events():
@@ -398,7 +399,7 @@ class SessionManager:
             info.base_url,
             "r",
             exp,
-            Ratchet.init_bob(sk, hs.e),
+            Ratchet.init_bob(sk, hs.e, max_stored=int(self.sc.cfg.get("max_stored", 1024))),
             p1["seq"],
             my_seq,
         )
@@ -443,7 +444,7 @@ class SessionManager:
         return Response(200, out)
 
     def _stream_out(
-        self, s: Session, info: CardInfo, trust: PeerTrust, rpc: Dict[str, Any]
+        self, s: Session, info: CardInfo, trust: PeerTrust, rpc: dict[str, Any]
     ) -> Iterator[bytes]:
         i = 0
         try:

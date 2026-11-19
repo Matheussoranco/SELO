@@ -26,10 +26,10 @@ import sys
 import threading
 import time
 import urllib.parse
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
@@ -38,7 +38,7 @@ PYTHON = sys.executable
 class FakeClock:
     """Relogio controlado pelo teste. Chamavel, como ``time.time``."""
 
-    def __init__(self, start: Optional[float] = None) -> None:
+    def __init__(self, start: float | None = None) -> None:
         self.t = float(start if start is not None else time.time())
 
     def __call__(self) -> float:
@@ -53,11 +53,11 @@ class Proc:
 
     def __init__(
         self,
-        args: List[str],
-        env: Optional[Dict[str, str]] = None,
+        args: list[str],
+        env: dict[str, str] | None = None,
         ready_timeout: float = 30.0,
-        cwd: Optional[Path] = None,
-        prefix: Optional[List[str]] = None,
+        cwd: Path | None = None,
+        prefix: list[str] | None = None,
     ) -> None:
         full_env = dict(os.environ)
         full_env["PYTHONPATH"] = os.pathsep.join(
@@ -77,9 +77,9 @@ class Proc:
             encoding="utf-8",
             errors="replace",
         )
-        self.out: List[str] = []
-        self.err: List[str] = []
-        self.info: Dict = {}
+        self.out: list[str] = []
+        self.err: list[str] = []
+        self.info: dict = {}
         ready = threading.Event()
 
         def pump_out() -> None:
@@ -133,11 +133,11 @@ class Proc:
 class Exchange:
     method: str
     path: str
-    headers: Dict[str, str]
+    headers: dict[str, str]
     body: bytes
     status: int = 0
     response: bytes = b""
-    resp_headers: Dict[str, str] = field(default_factory=dict)
+    resp_headers: dict[str, str] = field(default_factory=dict)
 
 
 _HOP = {
@@ -162,10 +162,10 @@ class TapProxy:
             raise ValueError(
                 "o TapProxy so intermedeia HTTP sem TLS (loopback de teste)"
             )
-        self.exchanges: List[Exchange] = []
+        self.exchanges: list[Exchange] = []
         self._lock = threading.Lock()
-        self._mutators: List[Callable[[Exchange], Optional[bytes]]] = []
-        self._sse_mutators: List[Callable[[int, bytes], List[bytes]]] = []
+        self._mutators: list[Callable[[Exchange], bytes | None]] = []
+        self._sse_mutators: list[Callable[[int, bytes], list[bytes]]] = []
         proxy = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -272,7 +272,7 @@ class TapProxy:
         conn.close()
 
     # -- injecao de falhas -------------------------------------------------------------------
-    def tamper_next(self, position: Optional[int] = None) -> None:
+    def tamper_next(self, position: int | None = None) -> None:
         """Inverte um bit de um byte do proximo corpo de requisicao (meio do corpo por padrao).
 
         O byte escolhido fica dentro de um valor JSON em base64 sempre que possivel, para que a
@@ -289,7 +289,7 @@ class TapProxy:
 
         self._mutators.append(mutate)
 
-    def mutate_next_stream(self, fn: Callable[[int, bytes], List[bytes]]) -> None:
+    def mutate_next_stream(self, fn: Callable[[int, bytes], list[bytes]]) -> None:
         """Aplica `fn(indice, evento)` a cada evento SSE da proxima resposta em streaming.
 
         `fn` devolve a lista de eventos a repassar: [] descarta, [e, e] duplica, e um evento
@@ -299,7 +299,7 @@ class TapProxy:
     def drop_next(self) -> None:
         self._mutators.append(lambda ex: None)
 
-    def replay(self, exchange: Exchange) -> Tuple[int, bytes]:
+    def replay(self, exchange: Exchange) -> tuple[int, bytes]:
         """Reenvia ao alvo, sem passar pelos mutadores, uma requisicao gravada."""
         conn = http.client.HTTPConnection(
             self.target.hostname, self.target.port, timeout=30
@@ -314,7 +314,7 @@ class TapProxy:
         conn.close()
         return resp.status, data
 
-    def find(self, path_prefix: str) -> List[Exchange]:
+    def find(self, path_prefix: str) -> list[Exchange]:
         with self._lock:
             return [e for e in self.exchanges if e.path.startswith(path_prefix)]
 

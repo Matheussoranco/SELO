@@ -8,8 +8,8 @@ from multiprocessing.connection import Client
 
 from selo import EXTENSION_URI
 from selo.card import WELL_KNOWN, verify_card
-from selo.local import LocalClient
 from selo.errors import SeloError
+from selo.local import LocalClient
 from tests.e2e import World, send_message
 
 

@@ -21,20 +21,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from selo import jcs  # noqa: E402
-from selo.card import build_card  # noqa: E402
-from selo.crypto.noise import HandshakeState  # noqa: E402
-from selo.crypto.primitives import (  # noqa: E402
+from selo import jcs
+from selo.card import build_card
+from selo.crypto.noise import HandshakeState
+from selo.crypto.primitives import (
     b64u,
     ed25519_from_bytes,
     ed25519_pub,
     x25519_from_bytes,
     x25519_pub,
 )
-from selo.crypto.ratchet import Ratchet, root_from_handshake, seal_with  # noqa: E402
-from selo.envelope import seal  # noqa: E402
-from selo.identity import Identity  # noqa: E402
-from selo.sessions import _ad_base, prologue  # noqa: E402
+from selo.crypto.ratchet import Ratchet, root_from_handshake, seal_with
+from selo.envelope import seal
+from selo.identity import Identity
+from selo.sessions import _ad_base, prologue
 
 T = 1_800_000_000  # instante fixo dos vetores (2027-01-15T08:00:00Z)
 OUT = Path(__file__).with_name("selo_v1.json")

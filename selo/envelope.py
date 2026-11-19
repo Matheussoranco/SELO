@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 from . import PROTOCOL, jcs
 from .card import CLOCK_SKEW, CardInfo
@@ -43,8 +44,8 @@ BASE_FIELDS = {
 
 @dataclass
 class Opened:
-    header: Dict[str, Any]
-    body: Dict[str, Any]
+    header: dict[str, Any]
+    body: dict[str, Any]
     sender: CardInfo
     digest: str
 
@@ -54,14 +55,14 @@ def seal(
     sender: Identity,
     sender_card_url: str,
     recipient: CardInfo,
-    body: Dict[str, Any],
+    body: dict[str, Any],
     t: str,
     now: float,
     ttl: int = DEFAULT_TTL,
-    re: Optional[str] = None,
-    escrow: Optional[EscrowTarget] = None,
-    _fixed: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    re: str | None = None,
+    escrow: EscrowTarget | None = None,
+    _fixed: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Sela um envelope. `_fixed` ({"msg": bytes, "eph": X25519PrivateKey}) existe so para
     gerar vetores de teste deterministicos; nunca use em producao."""
     if t not in TYPES or (t == "resp") != (re is not None):
@@ -72,7 +73,7 @@ def seal(
     if len(plaintext) > MAX_BODY - 4096:
         raise SeloError("body_too_large")
     iat = int(now)
-    h: Dict[str, Any] = {
+    h: dict[str, Any] = {
         "v": PROTOCOL,
         "t": t,
         "sender": sender.agent_id,
@@ -95,13 +96,13 @@ def seal(
     sig = sender.sig_key.sign(
         SIG_DOMAIN + sha256(aad) + enc + sha256(ct) + capsule_digest(capsule)
     )
-    env: Dict[str, Any] = {"h": h, "enc": b64u(enc), "ct": b64u(ct), "sig": b64u(sig)}
+    env: dict[str, Any] = {"h": h, "enc": b64u(enc), "ct": b64u(ct), "sig": b64u(sig)}
     if capsule is not None:
         env["escrow"] = capsule
     return env
 
 
-def peek(env: Any) -> Dict[str, Any]:
+def peek(env: Any) -> dict[str, Any]:
     """Valida a forma e devolve o cabecalho, ainda NAO autenticado."""
     if not isinstance(env, dict) or not (
         {"h", "enc", "ct", "sig"} <= set(env) <= {"h", "enc", "ct", "sig", "escrow"}
@@ -128,7 +129,7 @@ def peek(env: Any) -> Dict[str, Any]:
     return h
 
 
-def check_lifetime(h: Dict[str, Any], now: float) -> None:
+def check_lifetime(h: dict[str, Any], now: float) -> None:
     if not (
         abs(now - h["iat"]) <= CLOCK_SKEW
         and now < h["exp"]
@@ -144,11 +145,11 @@ def open_envelope(
     *,
     me: Identity,
     now: float,
-    resolve_sender: Callable[[Dict[str, Any]], CardInfo],
+    resolve_sender: Callable[[dict[str, Any]], CardInfo],
     replay: Callable[[str, str, int], None],
-    escrow_org: Callable[[CardInfo], Optional[str]] = lambda _c: None,
-    expect_type: Optional[str] = None,
-    get_cached_sender_key: Optional[Callable[[Dict[str, Any]], Optional[bytes]]] = None,
+    escrow_org: Callable[[CardInfo], str | None] = lambda _c: None,
+    expect_type: str | None = None,
+    get_cached_sender_key: Callable[[dict[str, Any]], bytes | None] | None = None,
 ) -> Opened:
     """Verifica e decifra na ordem da especificacao (8.3). Qualquer falha levanta SeloError.
 

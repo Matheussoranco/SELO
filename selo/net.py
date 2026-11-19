@@ -9,9 +9,10 @@ import socket
 import ssl
 import threading
 import urllib.parse
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple
+from typing import Any
 
 from .errors import SeloError
 
@@ -19,7 +20,7 @@ MAX_BODY = 256 * 1024 + 4096
 TIMEOUT = 30.0
 
 
-def is_loopback_host(host: Optional[str]) -> bool:
+def is_loopback_host(host: str | None) -> bool:
     if not host:
         return False
     if host.lower() == "localhost":
@@ -41,7 +42,7 @@ def check_url(url: str) -> urllib.parse.SplitResult:
 
 
 class HttpClient:
-    def __init__(self, ca_file: Optional[str] = None, timeout: float = TIMEOUT) -> None:
+    def __init__(self, ca_file: str | None = None, timeout: float = TIMEOUT) -> None:
         self.timeout = timeout
         self.ssl = (
             ssl.create_default_context(cafile=ca_file)
@@ -50,7 +51,7 @@ class HttpClient:
         )
 
     def _conn(
-        self, u: urllib.parse.SplitResult, timeout: Optional[float]
+        self, u: urllib.parse.SplitResult, timeout: float | None
     ) -> http.client.HTTPConnection:
         t = timeout or self.timeout
         if u.scheme == "https":
@@ -64,9 +65,9 @@ class HttpClient:
         method: str,
         url: str,
         body: Any = None,
-        headers: Optional[Dict[str, str]] = None,
-        timeout: Optional[float] = None,
-    ) -> Tuple[int, Dict[str, str], bytes]:
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> tuple[int, dict[str, str], bytes]:
         u = check_url(url)
         data = (
             body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
@@ -93,9 +94,9 @@ class HttpClient:
         method: str,
         url: str,
         body: Any = None,
-        headers: Optional[Dict[str, str]] = None,
-        timeout: Optional[float] = None,
-    ) -> Tuple[int, Any]:
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> tuple[int, Any]:
         status, _h, raw = self.request(method, url, body, headers, timeout)
         try:
             return status, json.loads(raw) if raw else None
@@ -109,9 +110,9 @@ class HttpClient:
         method: str,
         url: str,
         body: Any = None,
-        headers: Optional[Dict[str, str]] = None,
-        timeout: Optional[float] = None,
-    ) -> "StreamResponse":
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> StreamResponse:
         """Abre uma requisicao cuja resposta pode ser SSE. O chamador fecha com `close()`."""
         u = check_url(url)
         data = (
@@ -192,7 +193,7 @@ class StreamResponse:
     def close(self) -> None:
         try:
             self.conn.close()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
 
@@ -201,8 +202,8 @@ class StreamResponse:
 class Request:
     method: str
     path: str
-    query: Dict[str, str]
-    headers: Dict[str, str]
+    query: dict[str, str]
+    headers: dict[str, str]
     body: bytes
     client: str
 
@@ -219,8 +220,8 @@ class Response:
         status: int = 200,
         body: Any = None,
         content_type: str = "application/json",
-        headers: Optional[Dict[str, str]] = None,
-        stream: Optional[Iterator[bytes]] = None,
+        headers: dict[str, str] | None = None,
+        stream: Iterator[bytes] | None = None,
     ) -> None:
         self.status, self.content_type, self.headers, self.stream = (
             status,
@@ -254,7 +255,7 @@ class HttpServer:
         host: str,
         port: int,
         handler: Handler,
-        ssl_context: Optional[ssl.SSLContext] = None,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
         self.handler = handler
         outer = self
@@ -287,7 +288,7 @@ class HttpServer:
                     resp = outer.handler(req)
                 except SeloError as e:
                     resp = Response(400, {"error": e.code})
-                except Exception as e:  # nunca vaza detalhes internos
+                except Exception as e:  # noqa: BLE001 - nunca vaza detalhes internos
                     import traceback
 
                     traceback.print_exc()
@@ -320,7 +321,7 @@ class HttpServer:
                     if resp.stream is not None and hasattr(resp.stream, "close"):
                         try:
                             resp.stream.close()
-                        except Exception:
+                        except Exception:  # noqa: BLE001, S110
                             pass
 
             do_GET = do_POST = do_PUT = do_DELETE = _run
@@ -338,9 +339,9 @@ class HttpServer:
                 self.httpd.socket, server_side=True
             )
         self.port = self.httpd.server_address[1]
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
-    def start(self) -> "HttpServer":
+    def start(self) -> HttpServer:
         self._thread = threading.Thread(
             target=self.httpd.serve_forever, args=(0.05,), daemon=True
         )

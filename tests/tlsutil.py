@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime
 import ipaddress
 import os
-from typing import List, Tuple
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -23,9 +22,9 @@ def _write(path: str, data: bytes) -> str:
     return path
 
 
-def make_ca(directory: str, cn: str = "SELO Teste CA") -> Tuple[str, object, object]:
+def make_ca(directory: str, cn: str = "SELO Teste CA") -> tuple[str, object, object]:
     key = ec.generate_private_key(ec.SECP256R1())
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(_name(cn))
@@ -52,10 +51,10 @@ def make_ca(directory: str, cn: str = "SELO Teste CA") -> Tuple[str, object, obj
 
 
 def make_server_cert(
-    directory: str, name: str, ca_cert, ca_key, hosts: List[str]
-) -> Tuple[str, str]:
+    directory: str, name: str, ca_cert, ca_key, hosts: list[str]
+) -> tuple[str, str]:
     key = ec.generate_private_key(ec.SECP256R1())
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     sans = []
     for h in hosts:
         try:

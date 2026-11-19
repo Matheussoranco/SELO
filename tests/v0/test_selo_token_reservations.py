@@ -4,7 +4,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from selo_v0 import Agent, RemoteError, Session, SeloError
+from selo_v0 import Agent, RemoteError, SeloError, Session
 from selo_v0.sandbox import World
 from selo_v0.util import check_id
 

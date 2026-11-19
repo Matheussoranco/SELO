@@ -14,11 +14,10 @@ import socket
 import sys
 import tempfile
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selo.local import LocalClient
 from tests.harness import Proc, TapProxy
-
 
 # Cofre real do sistema onde existe (DPAPI no Windows, Keychain no macOS, Secret Service com
 # secret-tool); senao, o cofre em arquivo com senha de teste.
@@ -37,7 +36,7 @@ def free_port() -> int:
 
 def send_message(
     text: str, rid: Any = 1, method: str = "SendMessage", **params: Any
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "jsonrpc": "2.0",
         "id": rid,
@@ -53,7 +52,7 @@ def send_message(
     }
 
 
-def rpc(method: str, rid: Any = 1, **params: Any) -> Dict[str, Any]:
+def rpc(method: str, rid: Any = 1, **params: Any) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": rid, "method": method, "params": params}
 
 
@@ -62,10 +61,10 @@ class Node:
 
     def __init__(
         self,
-        world: "World",
+        world: World,
         name: str,
         proxied: bool = False,
-        cfg: Optional[Dict[str, Any]] = None,
+        cfg: dict[str, Any] | None = None,
         start_agent: bool = True,
     ) -> None:
         self.world, self.name = world, name
@@ -75,10 +74,10 @@ class Node:
         self.state_dir = os.path.join(world.tmp, name)
         self.config_path = os.path.join(world.tmp, f"{name}.json")
         self.port = free_port()
-        self.proxy: Optional[TapProxy] = (
+        self.proxy: TapProxy | None = (
             TapProxy(f"http://127.0.0.1:{self.port}") if proxied else None
         )
-        conf: Dict[str, Any] = {
+        conf: dict[str, Any] = {
             "name": name,
             "state_dir": self.state_dir,
             "public": {"host": "127.0.0.1", "port": self.port},
@@ -95,7 +94,7 @@ class Node:
             else:
                 conf[k] = v
         self.cfg = conf
-        self.sidecar: Optional[Proc] = None
+        self.sidecar: Proc | None = None
         self.start()
 
     def write_config(self) -> None:
@@ -126,7 +125,7 @@ class Node:
     def url(self) -> str:
         return self.info["public_url"]
 
-    def received(self) -> List[Dict[str, Any]]:
+    def received(self) -> list[dict[str, Any]]:
         import urllib.request
 
         with urllib.request.urlopen(
@@ -134,7 +133,7 @@ class Node:
         ) as r:
             return json.loads(r.read())["received"]
 
-    def debug(self) -> Dict[str, Any]:
+    def debug(self) -> dict[str, Any]:
         import urllib.request
 
         with urllib.request.urlopen(
@@ -155,17 +154,17 @@ class World:
 
     def __init__(self) -> None:
         self.tmp = tempfile.mkdtemp(prefix="selo-e2e-")
-        self.nodes: List[Node] = []
+        self.nodes: list[Node] = []
 
     def node(self, name: str, **kw: Any) -> Node:
         n = Node(self, name, **kw)
         self.nodes.append(n)
         return n
 
-    def __enter__(self) -> "World":
+    def __enter__(self) -> World:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         for n in self.nodes:
             try:
                 n.stop()

@@ -15,7 +15,7 @@ import json
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from . import jcs
 from .card import CLOCK_SKEW, CardInfo
@@ -35,6 +35,7 @@ from .crypto.ratchet import open_with
 from .errors import SeloError
 from .escrow import EscrowTarget, capsule_digest, open_capsule
 from .net import HttpClient, HttpServer, Request, Response
+
 try:
     from .optional.shamir import combine, random_secret, split
 except ImportError:
@@ -54,7 +55,7 @@ ATTESTATION_DEFAULT = 30 * 24 * 3600
 
 
 # -- documentos assinados ---------------------------------------------------------------
-def sign_doc(sk: Any, kind: str, body: Dict[str, Any]) -> Dict[str, Any]:
+def sign_doc(sk: Any, kind: str, body: dict[str, Any]) -> dict[str, Any]:
     if body.get("t") != kind:
         raise SeloError("bad_org_doc", "tipo")
     return {
@@ -65,7 +66,7 @@ def sign_doc(sk: Any, kind: str, body: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def verify_doc(anchor_pub: bytes, kind: str, doc: Any) -> Dict[str, Any]:
+def verify_doc(anchor_pub: bytes, kind: str, doc: Any) -> dict[str, Any]:
     if (
         not isinstance(doc, dict)
         or set(doc) != {"body", "sig"}
@@ -98,21 +99,21 @@ class Organization:
         self.escrow_sk = x25519_from_bytes(
             hkdf(master, salt=b"", info=b"selo/1/escrow-key", length=32)
         )
-        self.revoked: List[str] = []
+        self.revoked: list[str] = []
         self.seq = 0
         self.audit = AuditLog()
 
     @classmethod
     def create(
         cls, name: str, revocations_url: str = "", escrow_enabled: bool = False
-    ) -> "Organization":
+    ) -> Organization:
         return cls(name, random_secret(), revocations_url, escrow_enabled)
 
     @property
     def anchor_pub(self) -> bytes:
         return ed25519_pub(self.anchor)
 
-    def anchor_entry(self) -> Dict[str, Any]:
+    def anchor_entry(self) -> dict[str, Any]:
         """O que outro operador coloca em `trust.orgs` para confiar nesta organizacao."""
         return {
             "name": self.name,
@@ -120,8 +121,8 @@ class Organization:
             "revocations_url": self.revocations_url,
         }
 
-    def descriptor(self, now: float) -> Dict[str, Any]:
-        escrow: Dict[str, Any] = {"enabled": self.escrow_enabled}
+    def descriptor(self, now: float) -> dict[str, Any]:
+        escrow: dict[str, Any] = {"enabled": self.escrow_enabled}
         if self.escrow_enabled:
             escrow["agree_pub"] = b64u(x25519_pub(self.escrow_sk))
         return sign_doc(
@@ -141,9 +142,9 @@ class Organization:
         self,
         agent_id: str,
         now: float,
-        roles: Optional[List[str]] = None,
+        roles: list[str] | None = None,
         validity: int = ATTESTATION_DEFAULT,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return sign_doc(
             self.anchor,
             "attestation",
@@ -164,7 +165,7 @@ class Organization:
 
     def revocation_list(
         self, now: float, ttl: int = REVOCATIONS_DEFAULT
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if not 0 < ttl <= REVOCATIONS_MAX:
             raise SeloError("bad_ttl")
         return sign_doc(
@@ -180,21 +181,21 @@ class Organization:
             },
         )
 
-    def master_shares(self, threshold: int, shares: int) -> List[Tuple[int, str]]:
+    def master_shares(self, threshold: int, shares: int) -> list[tuple[int, str]]:
         if split is None:
             raise SeloError("not_supported", "Shamir secret sharing nao disponivel")
         return [(x, b64u(y)) for x, y in split(self.master, threshold, shares)]
 
     @staticmethod
-    def master_from_shares(parts: List[Tuple[int, str]]) -> bytes:
+    def master_from_shares(parts: list[tuple[int, str]]) -> bytes:
         if combine is None:
             raise SeloError("not_supported", "Shamir secret sharing nao disponivel")
         return combine([(x, unb64u(y)) for x, y in parts])
 
     # -- auditoria (escrow) ---------------------------------------------------------------
     def open_captured(
-        self, records: List[Dict[str, Any]], auditor: str, reason: str
-    ) -> List[Dict[str, Any]]:
+        self, records: list[dict[str, Any]], auditor: str, reason: str
+    ) -> list[dict[str, Any]]:
         """Decifra mensagens capturadas que tem capsula de escrow desta organizacao.
 
         Cada leitura exige auditor e motivo e entra no log encadeado por hash."""
@@ -222,7 +223,7 @@ class Organization:
             out.append({"digest": digest, "plaintext": plaintext})
         return out
 
-    def _open_one(self, msg: Dict[str, Any]) -> Optional[Any]:
+    def _open_one(self, msg: dict[str, Any]) -> Any | None:
         cap = msg["escrow"]
         if "h" in msg:  # envelope
             aad = jcs.canonicalize(msg["h"])
@@ -263,7 +264,7 @@ class Organization:
         self.audit.save(os.path.join(directory, "audit.jsonl"))
 
     @classmethod
-    def load(cls, directory: str, keystore: Any) -> "Organization":
+    def load(cls, directory: str, keystore: Any) -> Organization:
         with open(os.path.join(directory, "org.json"), encoding="utf-8") as fh:
             st = json.load(fh)
         master = keystore.load("org_master")
@@ -283,7 +284,7 @@ class Organization:
         ssl_context: Any = None,
         clock: Any = time.time,
         ttl: int = REVOCATIONS_DEFAULT,
-        reload_from: Optional[str] = None,
+        reload_from: str | None = None,
     ) -> HttpServer:
         """Serve /revocations e /descriptor. Com `reload_from`, rele o estado (revogacoes
         feitas pela CLI) a cada requisicao."""
@@ -308,9 +309,9 @@ class AuditLog:
     """Log de leituras auditadas, encadeado por hash (deteccao de adulteracao interna)."""
 
     def __init__(self) -> None:
-        self.records: List[Dict[str, Any]] = []
+        self.records: list[dict[str, Any]] = []
 
-    def append(self, entry: Dict[str, Any]) -> str:
+    def append(self, entry: dict[str, Any]) -> str:
         prev = self.records[-1]["hash"] if self.records else ""
         body = dict(entry, prev=prev)
         rec = dict(body, hash=b64u(sha256(jcs.canonicalize(body))))
@@ -330,11 +331,10 @@ class AuditLog:
 
     def save(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as fh:
-            for rec in self.records:
-                fh.write(json.dumps(rec) + "\n")
+            fh.writelines(json.dumps(rec) + "\n" for rec in self.records)
 
     @classmethod
-    def load(cls, path: str) -> "AuditLog":
+    def load(cls, path: str) -> AuditLog:
         log = cls()
         if os.path.exists(path):
             with open(path, encoding="utf-8") as fh:
@@ -344,18 +344,17 @@ class AuditLog:
 
 # -- lado do sidecar --------------------------------------------------------------------
 class OrgTrust:
-    def __init__(self, cfg: Dict[str, Any], http: HttpClient, clock: Any) -> None:
+    def __init__(self, cfg: dict[str, Any], http: HttpClient, clock: Any) -> None:
         self.http, self.clock = http, clock
-        self.anchors: Dict[str, Dict[str, Any]] = {}
-        self.own_org: Optional[str] = None
-        self.own_descriptor: Optional[Dict[str, Any]] = None
-        self._own_attestation: Optional[Dict[str, Any]] = None
+        self.anchors: dict[str, dict[str, Any]] = {}
+        self.own_org: str | None = None
+        self.own_descriptor: dict[str, Any] | None = None
+        self._own_attestation: dict[str, Any] | None = None
         trust_cfg = cfg.get("trust") or {}
         self.revocation_max_cache_age = int(
             trust_cfg.get("revocation_max_cache_age", REVOCATIONS_DEFAULT)
         )
-        if self.revocation_max_cache_age > REVOCATIONS_MAX:
-            self.revocation_max_cache_age = REVOCATIONS_MAX
+        self.revocation_max_cache_age = min(self.revocation_max_cache_age, REVOCATIONS_MAX)
         own = cfg.get("org")
         if own:
             desc_doc = own.get("descriptor")
@@ -384,13 +383,13 @@ class OrgTrust:
             if name in self.anchors and self.anchors[name]["anchor_pub"] != anchor:
                 raise SeloError("bad_config", f"ancora conflitante para {name}")
             self.anchors[name] = {"anchor_pub": anchor, "revocations_url": url}
-        self._lists: Dict[str, Dict[str, Any]] = {}
+        self._lists: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
 
-    def own_attestations(self) -> List[Dict[str, Any]]:
+    def own_attestations(self) -> list[dict[str, Any]]:
         return [self._own_attestation] if self._own_attestation else []
 
-    def _valid_attestation(self, doc: Any, agent_id: str, now: float) -> Optional[str]:
+    def _valid_attestation(self, doc: Any, agent_id: str, now: float) -> str | None:
         if not isinstance(doc, dict) or not isinstance(doc.get("body"), dict):
             return None
         org = doc["body"].get("org")
@@ -409,7 +408,7 @@ class OrgTrust:
             raise SeloError("bad_attestation", "atestacao fora da validade")
         return org
 
-    def revocations(self, org: str, now: float) -> Dict[str, Any]:
+    def revocations(self, org: str, now: float) -> dict[str, Any]:
         """Lista de revogacao fresca da organizacao, ou falha fechada (`revocations_stale`)."""
         with self._lock:
             cached = self._lists.get(org)
@@ -447,7 +446,7 @@ class OrgTrust:
             self._lists[org] = body
         return body
 
-    def attested_org(self, info: CardInfo, now: float) -> Optional[str]:
+    def attested_org(self, info: CardInfo, now: float) -> str | None:
         for doc in info.attestations:
             org = self._valid_attestation(doc, info.agent_id, now)
             if org is None:
@@ -457,7 +456,7 @@ class OrgTrust:
             return org
         return None
 
-    def escrow_org(self, peer_trust: Any) -> Optional[str]:
+    def escrow_org(self, peer_trust: Any) -> str | None:
             """Escrow so entre membros da propria organizacao, com o modo ligado (secao 11).
 
             O escrow so ativa quando:

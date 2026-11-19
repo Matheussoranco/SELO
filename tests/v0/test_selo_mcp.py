@@ -4,8 +4,8 @@ import json
 import sys
 import time
 import unittest
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
 
 from selo_v0 import RemoteError, Session
 from selo_v0.mcp_bridge import McpBridge, McpError, McpStdioClient, tool_to_manifest
@@ -158,9 +158,8 @@ class McpClientRegressionTests(unittest.TestCase):
         client = McpStdioClient([])
         with patch.object(
             client, "request", return_value={"tools": [], "nextCursor": "same"}
-        ) as request:
-            with self.assertRaises(McpError) as cm:
-                client.list_tools()
+        ) as request, self.assertRaises(McpError) as cm:
+            client.list_tools()
         self.assertEqual(cm.exception.code, "mcp_pagination")
         self.assertEqual(request.call_count, 2)
 

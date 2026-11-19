@@ -22,7 +22,6 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import Dict, Optional
 
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
@@ -35,7 +34,7 @@ SERVICE = "selo"
 class KeyStore:
     name = "abstract"
 
-    def load(self, key: str) -> Optional[bytes]:
+    def load(self, key: str) -> bytes | None:
         raise NotImplementedError
 
     def store(self, key: str, data: bytes) -> None:
@@ -59,9 +58,9 @@ class MemoryKeyStore(KeyStore):
     name = "memory"
 
     def __init__(self) -> None:
-        self._d: Dict[str, bytes] = {}
+        self._d: dict[str, bytes] = {}
 
-    def load(self, key: str) -> Optional[bytes]:
+    def load(self, key: str) -> bytes | None:
         return self._d.get(key)
 
     def store(self, key: str, data: bytes) -> None:
@@ -79,7 +78,7 @@ class DpapiKeyStore(KeyStore):
     def _path(self, key: str) -> str:
         return os.path.join(self.dir, f"{key}.dpapi")
 
-    def load(self, key: str) -> Optional[bytes]:
+    def load(self, key: str) -> bytes | None:
         p = self._path(key)
         if not os.path.exists(p):
             return None
@@ -147,7 +146,7 @@ class KeychainKeyStore(KeyStore):
             raise SeloError("keystore_unavailable", "Keychain (security) indisponivel")
         self.prefix = account_prefix
 
-    def load(self, key: str) -> Optional[bytes]:
+    def load(self, key: str) -> bytes | None:
         r = subprocess.run(
             [
                 "security",
@@ -160,6 +159,7 @@ class KeychainKeyStore(KeyStore):
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
         return bytes.fromhex(r.stdout.strip()) if r.returncode == 0 else None
 
@@ -178,6 +178,7 @@ class KeychainKeyStore(KeyStore):
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
         if r.returncode != 0:
             raise SeloError("keystore_error", r.stderr.strip())
@@ -191,7 +192,7 @@ class SecretServiceKeyStore(KeyStore):
             raise SeloError("keystore_unavailable", "secret-tool indisponivel")
         self.prefix = account_prefix
 
-    def load(self, key: str) -> Optional[bytes]:
+    def load(self, key: str) -> bytes | None:
         r = subprocess.run(
             [
                 "secret-tool",
@@ -203,6 +204,7 @@ class SecretServiceKeyStore(KeyStore):
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
         return (
             bytes.fromhex(r.stdout.strip())
@@ -225,6 +227,7 @@ class SecretServiceKeyStore(KeyStore):
             input=data.hex(),
             capture_output=True,
             text=True,
+            check=False,
         )
         if r.returncode != 0:
             raise SeloError("keystore_error", r.stderr.strip())
@@ -236,7 +239,7 @@ class FileKeyStore(KeyStore):
     name = "file"
     MAGIC = b"SELOKS1\x00"
 
-    def __init__(self, directory: str, password: Optional[str] = None) -> None:
+    def __init__(self, directory: str, password: str | None = None) -> None:
         self.dir = directory
         self._password = password
 
@@ -259,7 +262,7 @@ class FileKeyStore(KeyStore):
     def _path(self, key: str) -> str:
         return os.path.join(self.dir, f"{key}.sealed")
 
-    def load(self, key: str) -> Optional[bytes]:
+    def load(self, key: str) -> bytes | None:
         p = self._path(key)
         if not os.path.exists(p):
             return None

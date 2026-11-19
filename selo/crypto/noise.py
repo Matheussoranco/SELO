@@ -8,8 +8,6 @@ Sem PSK e sem rekey.
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
-
 from cryptography.hazmat.primitives.asymmetric import x25519
 
 from ..errors import SeloError
@@ -37,7 +35,7 @@ PATTERNS = {
 ONE_WAY = {"N"}
 
 
-def noise_hkdf(ck: bytes, ikm: bytes, n: int) -> Tuple[bytes, ...]:
+def noise_hkdf(ck: bytes, ikm: bytes, n: int) -> tuple[bytes, ...]:
     temp = hmac_sha256(ck, ikm)
     out1 = hmac_sha256(temp, b"\x01")
     out2 = hmac_sha256(temp, out1 + b"\x02")
@@ -47,7 +45,7 @@ def noise_hkdf(ck: bytes, ikm: bytes, n: int) -> Tuple[bytes, ...]:
 
 
 class CipherState:
-    def __init__(self, k: Optional[bytes] = None) -> None:
+    def __init__(self, k: bytes | None = None) -> None:
         self.k, self.n = k, 0
 
     def has_key(self) -> bool:
@@ -100,7 +98,7 @@ class SymmetricState:
         self.mix_hash(ct)
         return pt
 
-    def split(self) -> Tuple[CipherState, CipherState]:
+    def split(self) -> tuple[CipherState, CipherState]:
         k1, k2 = noise_hkdf(self.ck, b"", 2)
         return CipherState(k1[:32]), CipherState(k2[:32])
 
@@ -113,10 +111,10 @@ class HandshakeState:
         pattern: str,
         initiator: bool,
         prologue: bytes = b"",
-        s: Optional[x25519.X25519PrivateKey] = None,
-        e: Optional[x25519.X25519PrivateKey] = None,
-        rs: Optional[bytes] = None,
-        re: Optional[bytes] = None,
+        s: x25519.X25519PrivateKey | None = None,
+        e: x25519.X25519PrivateKey | None = None,
+        rs: bytes | None = None,
+        re: bytes | None = None,
     ) -> None:
         if pattern not in PATTERNS:
             raise SeloError("noise_pattern", pattern)
@@ -140,7 +138,7 @@ class HandshakeState:
                     raise SeloError("noise_missing_key", f"pre-mensagem {t}")
                 self.ss.mix_hash(key)
         self.idx = 0
-        self.result: Optional[Tuple[CipherState, CipherState]] = None
+        self.result: tuple[CipherState, CipherState] | None = None
 
     @property
     def h(self) -> bytes:
@@ -227,7 +225,7 @@ class HandshakeState:
         self._maybe_split()
         return payload
 
-    def transport(self) -> Tuple[CipherState, CipherState]:
+    def transport(self) -> tuple[CipherState, CipherState]:
         """(envio, recebimento) deste lado, apos o fim do handshake."""
         if self.result is None:
             raise SeloError("noise_state", "handshake incompleto")
@@ -239,9 +237,9 @@ def one_way(pattern: str) -> bool:
     return pattern in ONE_WAY
 
 
-__all__: List[str] = [
-    "HandshakeState",
+__all__: list[str] = [
     "CipherState",
+    "HandshakeState",
     "SymmetricState",
     "noise_hkdf",
     "one_way",
