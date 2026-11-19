@@ -71,12 +71,13 @@ class Sidecar:
         self.orgs = self._make_org_trust()
         self.trust = TrustPolicy(self.cfg, self.orgs)
         self.peers = PeerDirectory(
-            self.store,
-            self.http,
-            self.clock,
-            self.trust,
-            int(self.cfg["card"]["max_card_age"]),
-        )
+                    self.store,
+                    self.http,
+                    self.clock,
+                    self.trust,
+                    int(self.cfg["card"]["max_card_age"]),
+                    preconfigured_pins=self.cfg.get("trust", {}).get("pins"),
+                )
         self.hook = self._load_policy_hook()
         self.base_url = ""
         self._card: Optional[Dict[str, Any]] = None

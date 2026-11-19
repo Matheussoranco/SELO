@@ -61,11 +61,19 @@ class PeerDirectory:
         clock: Callable[[], float],
         policy: TrustPolicy,
         max_card_age: int,
+        preconfigured_pins: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         self.store, self.http, self.clock, self.policy = store, http, clock, policy
         self.max_card_age = max_card_age
         self._cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
         self._lock = threading.Lock()
+        # Carrega pins pre-configurados (trust.pins) no store
+        if preconfigured_pins:
+            for agent_id, pin_data in preconfigured_pins.items():
+                seq = int(pin_data.get("seq", 0))
+                hash_val = pin_data.get("hash", "")
+                if seq > 0 and hash_val:
+                    self.store.set_pin(agent_id, seq, hash_val)
 
     def _verify(
         self, card: Dict[str, Any], url: str, expected_id: Optional[str]
