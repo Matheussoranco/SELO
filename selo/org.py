@@ -335,6 +335,12 @@ class OrgTrust:
         self.own_org: Optional[str] = None
         self.own_descriptor: Optional[Dict[str, Any]] = None
         self._own_attestation: Optional[Dict[str, Any]] = None
+        trust_cfg = cfg.get("trust") or {}
+        self.revocation_max_cache_age = int(
+            trust_cfg.get("revocation_max_cache_age", REVOCATIONS_DEFAULT)
+        )
+        if self.revocation_max_cache_age > REVOCATIONS_MAX:
+            self.revocation_max_cache_age = REVOCATIONS_MAX
         own = cfg.get("org")
         if own:
             desc_doc = own.get("descriptor")
@@ -396,6 +402,7 @@ class OrgTrust:
             cached
             and cached["iat"] <= now + CLOCK_SKEW
             and now <= cached["next_update"]
+            and now - cached["iat"] <= self.revocation_max_cache_age
         ):
             return cached
         anchor = self.anchors[org]

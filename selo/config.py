@@ -23,7 +23,7 @@ DEFAULTS: Dict[str, Any] = {
     },
     "keystore": {"backend": "auto"},
     "peers": {},
-    "trust": {"allow_unattested": None, "peers": [], "orgs": [], "pins": {}},
+    "trust": {"allow_unattested": None, "peers": [], "orgs": [], "pins": {}, "revocation_max_cache_age": 3600},
     "org": None,  # {"descriptor": {...}, "attestation": {...}}
     "push": {"allowed_destinations": []},
     "tls": {"ca_file": None},
