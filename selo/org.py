@@ -443,16 +443,22 @@ class OrgTrust:
         return None
 
     def escrow_org(self, peer_trust: Any) -> Optional[str]:
-        """Escrow so entre membros da propria organizacao, com o modo ligado (secao 11)."""
-        if (
-            self.own_org is None
-            or self.own_descriptor is None
-            or not self.own_descriptor.get("escrow", {}).get("enabled")
-            or peer_trust.org != self.own_org
-            or not self._own_attestation
-        ):
-            return None
-        return self.own_org
+            """Escrow so entre membros da propria organizacao, com o modo ligado (secao 11).
+
+            O escrow so ativa quando:
+            - O destinatario (self) pertence a uma organizacao com escrow habilitado
+            - O remetente (peer_trust) tem atestacao valida da MESMA organizacao
+            - Ambos tem atestacao valida da mesma org (verificado em attested_org)
+            """
+            if (
+                self.own_org is None
+                or self.own_descriptor is None
+                or not self.own_descriptor.get("escrow", {}).get("enabled")
+                or peer_trust.org != self.own_org
+                or not self._own_attestation
+            ):
+                return None
+            return self.own_org
 
     def escrow_target(self, org: str) -> EscrowTarget:
         assert self.own_descriptor is not None and org == self.own_org
