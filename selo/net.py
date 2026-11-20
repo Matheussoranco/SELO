@@ -60,6 +60,18 @@ class HttpClient:
             )
         return http.client.HTTPConnection(u.hostname, u.port or 80, timeout=t)
 
+    def _prepare_request(
+        self, method: str, url: str, body: Any = None, headers: dict[str, str] | None = None
+    ) -> tuple[http.client.HTTPConnection, str, bytes, dict[str, str]]:
+        u = check_url(url)
+        data = (
+            body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
+        )
+        conn = self._conn(u, None)  # timeout handled by caller
+        path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+        hdrs = {"Content-Type": "application/json", **(headers or {})}
+        return conn, path, data, hdrs
+
     def request(
         self,
         method: str,
@@ -68,13 +80,7 @@ class HttpClient:
         headers: dict[str, str] | None = None,
         timeout: float | None = None,
     ) -> tuple[int, dict[str, str], bytes]:
-        u = check_url(url)
-        data = (
-            body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
-        )
-        hdrs = {"Content-Type": "application/json", **(headers or {})}
-        conn = self._conn(u, timeout)
-        path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+        conn, path, data, hdrs = self._prepare_request(method, url, body, headers)
         try:
             conn.request(method, path, body=data, headers=hdrs)
             resp = conn.getresponse()
@@ -114,23 +120,10 @@ class HttpClient:
         timeout: float | None = None,
     ) -> StreamResponse:
         """Abre uma requisicao cuja resposta pode ser SSE. O chamador fecha com `close()`."""
-        u = check_url(url)
-        data = (
-            body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
-        )
-        conn = self._conn(u, timeout or 300.0)
-        path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+        conn, path, data, hdrs = self._prepare_request(method, url, body, headers)
+        hdrs["Accept"] = "text/event-stream, application/json"
         try:
-            conn.request(
-                method,
-                path,
-                body=data,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "text/event-stream, application/json",
-                    **(headers or {}),
-                },
-            )
+            conn.request(method, path, body=data, headers=hdrs)
             resp = conn.getresponse()
         except ssl.SSLError as e:
             conn.close()

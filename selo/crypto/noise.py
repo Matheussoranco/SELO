@@ -25,12 +25,19 @@ HASHLEN = 32
 DHLEN = 32
 MAX_MESSAGE = 65535
 
+# Noise handshake tokens (padrao Noise Protocol Framework)
+# e = ephemeral key, s = static key
+TOKEN_EE = "ee"  # ephemeral-ephemeral DH
+TOKEN_SS = "ss"  # static-static DH
+TOKEN_ES = "es"  # ephemeral-static DH
+TOKEN_SE = "se"  # static-ephemeral DH
+
 PATTERNS = {
     # nome: (pre-mensagens do iniciador, pre-mensagens do respondedor, mensagens)
-    "N": ([], ["s"], [["e", "es"]]),
-    "NN": ([], [], [["e"], ["e", "ee"]]),
-    "XX": ([], [], [["e"], ["e", "ee", "s", "es"], ["s", "se"]]),
-    "IK": ([], ["s"], [["e", "es", "s", "ss"], ["e", "ee", "se"]]),
+    "N": ([], ["s"], [["e", TOKEN_ES]]),
+    "NN": ([], [], [["e"], ["e", TOKEN_EE]]),
+    "XX": ([], [], [["e"], ["e", TOKEN_EE, "s", TOKEN_ES], ["s", TOKEN_SE]]),
+    "IK": ([], ["s"], [["e", TOKEN_ES, "s", TOKEN_SS], ["e", TOKEN_EE, TOKEN_SE]]),
 }
 ONE_WAY = {"N"}
 
@@ -155,23 +162,23 @@ class HandshakeState:
         return self.idx >= len(self.messages)
 
     def _dh(self, token: str) -> bytes:
-        if token == "ee":
-            return x25519_dh(self.e, self.re)
-        if token == "ss":
-            return x25519_dh(self.s, self.rs)
-        if token == "es":
-            return (
-                x25519_dh(self.e, self.rs)
-                if self.initiator
-                else x25519_dh(self.s, self.re)
-            )
-        if token == "se":
-            return (
-                x25519_dh(self.s, self.re)
-                if self.initiator
-                else x25519_dh(self.e, self.rs)
-            )
-        raise SeloError("noise_pattern", token)
+            if token == TOKEN_EE:
+                return x25519_dh(self.e, self.re)
+            if token == TOKEN_SS:
+                return x25519_dh(self.s, self.rs)
+            if token == TOKEN_ES:
+                return (
+                    x25519_dh(self.e, self.rs)
+                    if self.initiator
+                    else x25519_dh(self.s, self.re)
+                )
+            if token == TOKEN_SE:
+                return (
+                    x25519_dh(self.s, self.re)
+                    if self.initiator
+                    else x25519_dh(self.e, self.rs)
+                )
+            raise SeloError("noise_pattern", token)
 
     def _maybe_split(self) -> None:
         self.idx += 1

@@ -17,6 +17,8 @@ import os
 import sys
 import uuid
 
+from .errors import SeloError
+
 
 def _cmd_init(a: argparse.Namespace) -> int:
     if os.path.exists(a.config) and not a.force:
@@ -41,6 +43,84 @@ def _cmd_init(a: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_sidecar(a: argparse.Namespace) -> int:
+    from .config import load
+    from .sidecar import run_forever
+
+    run_forever(load(a.config))
+    return 0
+
+
+def _cmd_rotate(a: argparse.Namespace) -> int:
+    sc = _sidecar_offline(a.config)
+    try:
+        sc.rotate_keys()
+        print(
+            json.dumps(
+                {
+                    "agent_id": sc.identity.agent_id,
+                    "kel_len": len(sc.identity.kel),
+                }
+            )
+        )
+    finally:
+        sc.store.close()
+    return 0
+
+
+def _cmd_revoke(a: argparse.Namespace) -> int:
+    sc = _sidecar_offline(a.config)
+    try:
+        sc.revoke_identity()
+        print(
+            json.dumps(
+                {
+                    "agent_id": sc.identity.agent_id,
+                    "kel_len": len(sc.identity.kel),
+                }
+            )
+        )
+    finally:
+        sc.store.close()
+    return 0
+
+
+def _cmd_send(a: argparse.Namespace) -> int:
+    from .config import load
+    from .local import LocalClient
+
+    client = LocalClient(load(a.config)["state_dir"])
+    rpc = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "SendMessage",
+        "params": {
+            "message": {
+                "messageId": str(uuid.uuid4()),
+                "role": "ROLE_USER",
+                "parts": [{"text": a.text}],
+            }
+        },
+    }
+    print(json.dumps(client.call(a.peer, rpc), indent=2, ensure_ascii=False))
+    return 0
+
+
+def _cmd_whoami(a: argparse.Namespace) -> int:
+    from .config import load
+    from .local import LocalClient
+
+    client = LocalClient(load(a.config)["state_dir"])
+    print(json.dumps(client.whoami(), indent=2))
+    return 0
+
+
+def _cmd_org(a: argparse.Namespace) -> int:
+    from .org import run_cli
+
+    return run_cli(a)
+
+
 def _sidecar_offline(path: str):
     from .config import load
     from .sidecar import Sidecar
@@ -48,12 +128,25 @@ def _sidecar_offline(path: str):
     return Sidecar(load(path))
 
 
-def main(argv=None) -> int:
+# Dispatch table: command -> handler function
+COMMANDS: dict[str, tuple[callable, str]] = {
+    "init": (_cmd_init, "init parser"),
+    "sidecar": (_cmd_sidecar, "sidecar parser"),
+    "rotate": (_cmd_rotate, "rotate parser"),
+    "revoke": (_cmd_revoke, "revoke parser"),
+    "send": (_cmd_send, "send parser"),
+    "whoami": (_cmd_whoami, "whoami parser"),
+    "org": (_cmd_org, "org parser"),
+}
+
+
+def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="selo", description="SELO: A2A cifrado de ponta a ponta"
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
+    # init
     p = sub.add_parser("init")
     p.add_argument("--config", required=True)
     p.add_argument("--name", required=True)
@@ -74,76 +167,38 @@ def main(argv=None) -> int:
     )
     p.add_argument("--force", action="store_true")
 
+    # sidecar, rotate, revoke, whoami
     for name in ("sidecar", "rotate", "revoke", "whoami"):
         q = sub.add_parser(name)
         q.add_argument("--config", required=True)
 
+    # send
     q = sub.add_parser("send")
     q.add_argument("--config", required=True)
     q.add_argument("--peer", required=True)
     q.add_argument("--text", required=True)
 
+    # org
     from .org import add_cli as add_org_cli
 
     add_org_cli(sub)
 
+    return ap
+
+
+def main(argv=None) -> int:
+    ap = _build_parser()
     a = ap.parse_args(argv)
-    from .errors import SeloError
+
+    handler, _ = COMMANDS.get(a.cmd, (None, ""))
+    if handler is None:
+        ap.error(f"comando desconhecido: {a.cmd}")
 
     try:
-        if a.cmd == "init":
-            return _cmd_init(a)
-        if a.cmd == "sidecar":
-            from .config import load
-            from .sidecar import run_forever
-
-            run_forever(load(a.config))
-            return 0
-        if a.cmd in ("rotate", "revoke"):
-            sc = _sidecar_offline(a.config)
-            try:
-                sc.rotate_keys() if a.cmd == "rotate" else sc.revoke_identity()
-                print(
-                    json.dumps(
-                        {
-                            "agent_id": sc.identity.agent_id,
-                            "kel_len": len(sc.identity.kel),
-                        }
-                    )
-                )
-            finally:
-                sc.store.close()
-            return 0
-        if a.cmd in ("send", "whoami"):
-            from .config import load
-            from .local import LocalClient
-
-            client = LocalClient(load(a.config)["state_dir"])
-            if a.cmd == "whoami":
-                print(json.dumps(client.whoami(), indent=2))
-                return 0
-            rpc = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "SendMessage",
-                "params": {
-                    "message": {
-                        "messageId": str(uuid.uuid4()),
-                        "role": "ROLE_USER",
-                        "parts": [{"text": a.text}],
-                    }
-                },
-            }
-            print(json.dumps(client.call(a.peer, rpc), indent=2, ensure_ascii=False))
-            return 0
-        if a.cmd == "org":
-            from .org import run_cli
-
-            return run_cli(a)
+        return handler(a)
     except SeloError as e:
         print(f"erro: {e}", file=sys.stderr)
         return 2
-    return 1
 
 
 if __name__ == "__main__":

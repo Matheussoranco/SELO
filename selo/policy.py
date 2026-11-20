@@ -19,12 +19,15 @@ import copy
 import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from .errors import SeloError
 
-DIRECTIONS = ("inbound", "outbound")
-STAGES = ("request", "response")
+Direction = Literal["inbound", "outbound"]
+Stage = Literal["request", "response"]
+
+DIRECTIONS: tuple[Direction, ...] = ("inbound", "outbound")
+STAGES: tuple[Stage, ...] = ("request", "response")
 
 
 class PolicyDenied(Exception):
@@ -35,10 +38,8 @@ class PolicyDenied(Exception):
 
 @dataclass(frozen=True)
 class PolicyEvent:
-    direction: (
-        str  # inbound: o par chamou este agente; outbound: este agente chama o par
-    )
-    stage: str  # request | response
+    direction: Direction  # inbound: o par chamou este agente; outbound: este agente chama o par
+    stage: Stage  # request | response
     peer_id: str
     peer_org: str | None
     method: str | None
@@ -48,8 +49,8 @@ class PolicyEvent:
 class NullHook:
     def check(
         self,
-        direction: str,
-        stage: str,
+        direction: Direction,
+        stage: Stage,
         peer_id: str,
         peer_org: str | None,
         rpc: Any,
@@ -64,8 +65,8 @@ class Hook(NullHook):
 
     def check(
         self,
-        direction: str,
-        stage: str,
+        direction: Direction,
+        stage: Stage,
         peer_id: str,
         peer_org: str | None,
         rpc: Any,
