@@ -5,11 +5,11 @@ from __future__ import annotations
 import copy
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 from .errors import SeloError
 
-DEFAULTS: Dict[str, Any] = {
+DEFAULTS: dict[str, Any] = {
     "name": "agente",
     "state_dir": None,  # obrigatorio
     "public": {"host": "127.0.0.1", "port": 0, "url": None, "tls": None},
@@ -23,7 +23,7 @@ DEFAULTS: Dict[str, Any] = {
     },
     "keystore": {"backend": "auto"},
     "peers": {},
-    "trust": {"allow_unattested": None, "peers": [], "orgs": []},
+    "trust": {"allow_unattested": None, "peers": [], "orgs": [], "pins": {}, "revocation_max_cache_age": 3600},
     "org": None,  # {"descriptor": {...}, "attestation": {...}}
     "push": {"allowed_destinations": []},
     "tls": {"ca_file": None},
@@ -34,7 +34,7 @@ DEFAULTS: Dict[str, Any] = {
 }
 
 
-def _merge(base: Dict[str, Any], over: Dict[str, Any]) -> Dict[str, Any]:
+def _merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
     out = copy.deepcopy(base)
     for k, v in over.items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
@@ -44,7 +44,7 @@ def _merge(base: Dict[str, Any], over: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def load(path: str) -> Dict[str, Any]:
+def load(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
         raw = json.load(fh)
     cfg = from_dict(raw)
@@ -54,7 +54,7 @@ def load(path: str) -> Dict[str, Any]:
     return cfg
 
 
-def from_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
+def from_dict(raw: dict[str, Any]) -> dict[str, Any]:
     unknown = set(raw) - set(DEFAULTS) - {"_path"}
     if unknown:
         raise SeloError("bad_config", f"chaves desconhecidas: {sorted(unknown)}")

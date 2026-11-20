@@ -17,7 +17,7 @@ import copy
 import os
 import re
 import urllib.parse
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from . import envelope
 from .card import CardInfo, normalize_base
@@ -29,7 +29,7 @@ PUSH_PATH = "/selo/v1/push/"
 _REF = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 
 
-def _configs(rpc: Dict[str, Any]) -> list:
+def _configs(rpc: dict[str, Any]) -> list:
     """Referencias (dict mutavel) as configuracoes push dentro de uma requisicao."""
     method = rpc.get("method")
     params = rpc.get("params")
@@ -46,7 +46,7 @@ def _configs(rpc: Dict[str, Any]) -> list:
     return []
 
 
-def _split_push_url(url: str) -> Tuple[str, str]:
+def _split_push_url(url: str) -> tuple[str, str]:
     u = urllib.parse.urlsplit(url)
     if u.scheme not in ("http", "https") or not u.hostname or u.query or u.fragment:
         raise SeloError("push_destination_denied", "URL de push invalida")
@@ -56,7 +56,7 @@ def _split_push_url(url: str) -> Tuple[str, str]:
 
 
 # -- cliente --------------------------------------------------------------------------------
-def rewrite_outbound(sc: Any, rpc: Dict[str, Any], info: CardInfo) -> Dict[str, Any]:
+def rewrite_outbound(sc: Any, rpc: dict[str, Any], info: CardInfo) -> dict[str, Any]:
     cfgs = _configs(rpc)
     if not cfgs:
         return rpc
@@ -119,7 +119,7 @@ def _allowed(sc: Any, base: str, sender: CardInfo) -> bool:
     return base == normalize_base(sender.base_url) or base in allowed
 
 
-def rewrite_inbound(sc: Any, rpc: Dict[str, Any], sender: CardInfo) -> Dict[str, Any]:
+def rewrite_inbound(sc: Any, rpc: dict[str, Any], sender: CardInfo) -> dict[str, Any]:
     if not _configs(rpc):
         return rpc
     rpc = copy.deepcopy(rpc)
@@ -152,7 +152,7 @@ def rewrite_inbound(sc: Any, rpc: Dict[str, Any], sender: CardInfo) -> Dict[str,
 def handle_intake(sc: Any, req: Request) -> Response:
     if req.method != "POST" or not req.path.startswith("/push-intake/"):
         return Response(404, {"error": "not_found"})
-    entry: Optional[Dict[str, str]] = sc.store.get_push_in(
+    entry: dict[str, str] | None = sc.store.get_push_in(
         req.path[len("/push-intake/") :]
     )
     if entry is None:

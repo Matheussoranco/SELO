@@ -24,7 +24,8 @@ import threading
 import time
 import urllib.request
 import uuid
-from typing import Any, Dict, Iterator, List, Optional
+from collections.abc import Iterator
+from typing import Any
 
 from .net import HttpServer, Request, Response, sse_event
 
@@ -37,10 +38,10 @@ FINAL = {
 
 
 def _now() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
-def _text(message: Dict[str, Any]) -> str:
+def _text(message: dict[str, Any]) -> str:
     return "".join(
         p.get("text", "") for p in message.get("parts", []) if isinstance(p, dict)
     )
@@ -48,22 +49,22 @@ def _text(message: Dict[str, Any]) -> str:
 
 class RefAgent:
     def __init__(
-        self, name: str = "ref", step: float = 0.2, inbound_token: Optional[str] = None
+        self, name: str = "ref", step: float = 0.2, inbound_token: str | None = None
     ) -> None:
         self.name, self.step, self.inbound_token = name, step, inbound_token
-        self.tasks: Dict[str, Dict[str, Any]] = {}
-        self.push: Dict[str, Dict[str, Dict[str, Any]]] = {}  # task_id -> {cfg_id: cfg}
-        self.subscribers: Dict[str, List["queue.Queue"]] = {}
-        self.received: List[Dict[str, Any]] = []
-        self.pushes_sent: List[Dict[str, Any]] = []
-        self.webhook: List[
-            Dict[str, Any]
+        self.tasks: dict[str, dict[str, Any]] = {}
+        self.push: dict[str, dict[str, dict[str, Any]]] = {}  # task_id -> {cfg_id: cfg}
+        self.subscribers: dict[str, list[queue.Queue]] = {}
+        self.received: list[dict[str, Any]] = []
+        self.pushes_sent: list[dict[str, Any]] = []
+        self.webhook: list[
+            dict[str, Any]
         ] = []  # notificacoes push recebidas por este agente
         self._lock = threading.RLock()
-        self.server: Optional[HttpServer] = None
+        self.server: HttpServer | None = None
 
     # -- servidor -------------------------------------------------------------------------
-    def start(self, host: str = "127.0.0.1", port: int = 0) -> "RefAgent":
+    def start(self, host: str = "127.0.0.1", port: int = 0) -> RefAgent:
         self.server = HttpServer(host, port, self.handle).start()
         return self
 
@@ -105,7 +106,7 @@ class RefAgent:
             return Response(401, {"error": "unauthorized"})
         try:
             rpc = req.json()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return Response(200, _err(None, -32700, "parse error"))
         rid, method, params = rpc.get("id"), rpc.get("method"), rpc.get("params") or {}
         try:
@@ -151,7 +152,7 @@ class RefAgent:
             return Response(200, _err(rid, -32001, f"task not found: {e}"))
 
     # -- tarefas --------------------------------------------------------------------------
-    def _send(self, params: Dict[str, Any], req: Request) -> Dict[str, Any]:
+    def _send(self, params: dict[str, Any], req: Request) -> dict[str, Any]:
         msg = params.get("message") or {}
         text = _text(msg)
         with self._lock:
@@ -201,11 +202,11 @@ class RefAgent:
             )
         self._set_state(task_id, "TASK_STATE_COMPLETED")
 
-    def _task(self, task_id: Any) -> Dict[str, Any]:
+    def _task(self, task_id: Any) -> dict[str, Any]:
         with self._lock:
             return json.loads(json.dumps(self.tasks[task_id]))
 
-    def _cancel(self, task_id: Any) -> Dict[str, Any]:
+    def _cancel(self, task_id: Any) -> dict[str, Any]:
         with self._lock:
             task = self.tasks[task_id]
             if task["status"]["state"] not in FINAL:
@@ -250,7 +251,7 @@ class RefAgent:
             }
         self._emit(task_id, ev, final=False)
 
-    def _emit(self, task_id: str, ev: Dict[str, Any], final: bool) -> None:
+    def _emit(self, task_id: str, ev: dict[str, Any], final: bool) -> None:
         with self._lock:
             subs = list(self.subscribers.get(task_id, []))
             cfgs = list(self.push.get(task_id, {}).values())
@@ -261,7 +262,7 @@ class RefAgent:
                 target=self._send_push, args=(cfg, ev), daemon=True
             ).start()
 
-    def _send_push(self, cfg: Dict[str, Any], ev: Dict[str, Any]) -> None:
+    def _send_push(self, cfg: dict[str, Any], ev: dict[str, Any]) -> None:
         req = urllib.request.Request(
             cfg["url"],
             data=json.dumps(ev).encode(),
@@ -274,12 +275,12 @@ class RefAgent:
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
                 status = r.status
-        except Exception as e:  # o teste inspeciona o resultado
+        except Exception as e:  # noqa: BLE001 - o teste inspeciona o resultado
             status = f"erro: {e}"
         with self._lock:
             self.pushes_sent.append({"url": cfg["url"], "event": ev, "status": status})
 
-    def _add_push(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _add_push(self, params: dict[str, Any]) -> dict[str, Any]:
         task_id = params.get("taskId")
         with self._lock:
             if task_id not in self.tasks:
@@ -294,8 +295,8 @@ class RefAgent:
             return dict(cfg)
 
     # -- streaming ------------------------------------------------------------------------
-    def _sse(self, rid: Any, task_id: str, first: Dict[str, Any]) -> Response:
-        q: "queue.Queue" = queue.Queue()
+    def _sse(self, rid: Any, task_id: str, first: dict[str, Any]) -> Response:
+        q: queue.Queue = queue.Queue()
         with self._lock:
             self.subscribers.setdefault(task_id, []).append(q)
             already_final = self.tasks[task_id]["status"]["state"] in FINAL
@@ -318,11 +319,11 @@ class RefAgent:
         return Response(200, content_type="text/event-stream", stream=gen())
 
 
-def _ok(rid: Any, result: Any) -> Dict[str, Any]:
+def _ok(rid: Any, result: Any) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": rid, "result": result}
 
 
-def _err(rid: Any, code: int, message: str) -> Dict[str, Any]:
+def _err(rid: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": rid, "error": {"code": code, "message": message}}
 
 

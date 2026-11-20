@@ -6,8 +6,6 @@ Validada pelos vetores oficiais em tests/vectors/hpke_base_x25519_sha256_chachap
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 from cryptography.hazmat.primitives.asymmetric import x25519
 
 from ..errors import SeloError
@@ -60,8 +58,8 @@ def _extract_and_expand(dh: bytes, kem_context: bytes) -> bytes:
 
 
 def encap(
-    pk_r: bytes, sk_e: Optional[x25519.X25519PrivateKey] = None
-) -> Tuple[bytes, bytes]:
+    pk_r: bytes, sk_e: x25519.X25519PrivateKey | None = None
+) -> tuple[bytes, bytes]:
     sk_e = sk_e or x25519_generate()
     enc = x25519_pub(sk_e)
     dh = x25519_dh(sk_e, pk_r)
@@ -121,8 +119,8 @@ def key_schedule(shared_secret: bytes, info: bytes) -> Context:
 
 
 def setup_base_s(
-    pk_r: bytes, info: bytes, sk_e: Optional[x25519.X25519PrivateKey] = None
-) -> Tuple[bytes, Context]:
+    pk_r: bytes, info: bytes, sk_e: x25519.X25519PrivateKey | None = None
+) -> tuple[bytes, Context]:
     shared, enc = encap(pk_r, sk_e)
     return enc, key_schedule(shared, info)
 
@@ -131,7 +129,7 @@ def setup_base_r(enc: bytes, sk_r: x25519.X25519PrivateKey, info: bytes) -> Cont
     return key_schedule(decap(enc, sk_r), info)
 
 
-def seal_base(pk_r: bytes, info: bytes, aad: bytes, pt: bytes) -> Tuple[bytes, bytes]:
+def seal_base(pk_r: bytes, info: bytes, aad: bytes, pt: bytes) -> tuple[bytes, bytes]:
     """Single-shot (secao 6.1): devolve (enc, ct)."""
     enc, ctx = setup_base_s(pk_r, info)
     return enc, ctx.seal(aad, pt)

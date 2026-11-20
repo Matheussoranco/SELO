@@ -8,7 +8,7 @@ Especificacao, secao 5. A KEL e uma lista de declaracoes `{"body": B, "sigs": [.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 
@@ -37,11 +37,11 @@ def derive_agent_id(genesis_sig_pub: bytes) -> str:
     return "selo:" + b64u(sha256(b"selo/1/agent-id\x00", genesis_sig_pub)[:24])
 
 
-def statement_hash(body: Dict[str, Any]) -> str:
+def statement_hash(body: dict[str, Any]) -> str:
     return b64u(sha256(jcs.canonicalize(body)))
 
 
-def _sign(sk: ed25519.Ed25519PrivateKey, body: Dict[str, Any]) -> str:
+def _sign(sk: ed25519.Ed25519PrivateKey, body: dict[str, Any]) -> str:
     return b64u(sk.sign(KEL_DOMAIN + jcs.canonicalize(body)))
 
 
@@ -58,10 +58,10 @@ class KelState:
     """Resultado da verificacao de uma KEL."""
 
     agent_id: str
-    entries: List[KeyEntry]
+    entries: list[KeyEntry]
     revoked: bool
     head: str  # hash da ultima declaracao
-    revoked_at: Optional[int] = None
+    revoked_at: int | None = None
 
     @property
     def seq(self) -> int:
@@ -76,7 +76,7 @@ class KelState:
             raise SeloError("unknown_key_seq", str(seq))
         return self.entries[seq]
 
-    def key_usable(self, seq: int, now: float, msg_iat: Optional[float] = None) -> bool:
+    def key_usable(self, seq: int, now: float, msg_iat: float | None = None) -> bool:
         """A chave em `seq` pode ser usada agora? (atual, ou anterior dentro da janela)."""
         if self.revoked:
             return False
@@ -92,8 +92,8 @@ class KelState:
 def verify_kel(kel: Any) -> KelState:
     if not isinstance(kel, list) or not kel:
         raise SeloError("bad_kel", "KEL vazia")
-    entries: List[KeyEntry] = []
-    prev_hash: Optional[str] = None
+    entries: list[KeyEntry] = []
+    prev_hash: str | None = None
     agent_id = ""
     revoked, revoked_at = False, None
     last_iat = -1
@@ -162,13 +162,13 @@ def verify_kel(kel: Any) -> KelState:
 class Identity:
     """Chaves privadas de um agente (atuais e da geracao anterior) e sua KEL."""
 
-    sig_keys: List[ed25519.Ed25519PrivateKey]
-    agree_keys: List[x25519.X25519PrivateKey]
-    kel: List[Dict[str, Any]]
-    _state: Optional[KelState] = field(default=None, repr=False)
+    sig_keys: list[ed25519.Ed25519PrivateKey]
+    agree_keys: list[x25519.X25519PrivateKey]
+    kel: list[dict[str, Any]]
+    _state: KelState | None = field(default=None, repr=False)
 
     @classmethod
-    def generate(cls, now: int, sig: Any = None, agree: Any = None) -> "Identity":
+    def generate(cls, now: int, sig: Any = None, agree: Any = None) -> Identity:
         """Nova identidade. `sig`/`agree` fixos so para vetores de teste."""
         sig, agree = sig or ed25519_generate(), agree or x25519_generate()
         body = {
@@ -243,7 +243,7 @@ class Identity:
         self._state = None
 
     # -- serializacao para o cofre de chaves ----------------------------------------------
-    def to_secret(self) -> Dict[str, Any]:
+    def to_secret(self) -> dict[str, Any]:
         return {
             "sig": [b64u(ed25519_priv(k)) for k in self.sig_keys],
             "agree": [b64u(x25519_priv(k)) for k in self.agree_keys],
@@ -251,7 +251,7 @@ class Identity:
         }
 
     @classmethod
-    def from_secret(cls, d: Dict[str, Any]) -> "Identity":
+    def from_secret(cls, d: dict[str, Any]) -> Identity:
         ident = cls(
             [ed25519_from_bytes(unb64u(k)) for k in d["sig"]],
             [x25519_from_bytes(unb64u(k)) for k in d["agree"]],
@@ -267,7 +267,7 @@ class Identity:
 
 
 def check_extends(
-    pinned: Optional[Tuple[int, str]], state: KelState, kel: List[Dict[str, Any]]
+    pinned: tuple[int, str] | None, state: KelState, kel: list[dict[str, Any]]
 ) -> None:
     """Exige que a KEL estenda a fixada (especificacao 5.2). `pinned` = (seq, hash)."""
     if pinned is None:

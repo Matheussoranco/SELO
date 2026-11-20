@@ -6,7 +6,7 @@ import json
 import unittest
 from unittest import mock
 
-from selo_v0 import RemoteError, Session, SeloError
+from selo_v0 import RemoteError, SeloError, Session
 from selo_v0.audit import audit_traffic
 from selo_v0.manifest import (
     manifest_hash,
@@ -554,6 +554,7 @@ class Robustness(Base):
     def test_authenticated_but_malformed_bodies_never_cause_internal_errors(self):
         """Corpo autenticado e cifrado corretamente, mas com campos absurdos."""
         import random
+
         from selo_v0.envelope import open_envelope, seal
         from selo_v0.util import b64d
 

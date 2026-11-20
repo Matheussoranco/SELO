@@ -111,12 +111,11 @@ class TlsEndToEndTest(unittest.TestCase):
             self.assertEqual(b.received(), [])
 
     def test_client_without_ca_rejects_private_ca(self):
-        with self.assertRaises(SeloError) as cm:
-            with World() as w:
-                b = w.node(
-                    "bob", cfg={"public": {"tls": {"cert": self.cert, "key": self.key}}}
-                )
-                HttpClient().request("GET", b.url + "/.well-known/agent-card.json")
+        with self.assertRaises(SeloError) as cm, World() as w:
+            b = w.node(
+                "bob", cfg={"public": {"tls": {"cert": self.cert, "key": self.key}}}
+            )
+            HttpClient().request("GET", b.url + "/.well-known/agent-card.json")
         self.assertEqual(cm.exception.code, "tls_error")
 
 

@@ -12,7 +12,8 @@ import os
 import ssl
 import threading
 import time
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple
+from collections.abc import Callable, Iterator
+from typing import Any
 
 from . import channel, envelope
 from .card import WELL_KNOWN, CardInfo, build_card, local_view
@@ -30,11 +31,11 @@ IDENTITY_KEY = "identity"
 ERROR_STATUS = {"replay": 409, "unknown_session": 404, "body_too_large": 413}
 
 
-def _rpc_error(rid: Any, e: SeloError) -> Dict[str, Any]:
+def _rpc_error(rid: Any, e: SeloError) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": rid, "error": e.jsonrpc_error()}
 
 
-def _check_rpc_request(rpc: Any) -> Tuple[Any, str]:
+def _check_rpc_request(rpc: Any) -> tuple[Any, str]:
     if (
         not isinstance(rpc, dict)
         or rpc.get("jsonrpc") != "2.0"
@@ -47,9 +48,9 @@ def _check_rpc_request(rpc: Any) -> Tuple[Any, str]:
 class Sidecar:
     def __init__(
         self,
-        cfg: Dict[str, Any],
-        keystore: Optional[KeyStore] = None,
-        clock: Optional[Callable[[], float]] = None,
+        cfg: dict[str, Any],
+        keystore: KeyStore | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self.cfg = (
             from_dict({k: v for k, v in cfg.items() if k != "_path"})
@@ -71,20 +72,20 @@ class Sidecar:
         self.orgs = self._make_org_trust()
         self.trust = TrustPolicy(self.cfg, self.orgs)
         self.peers = PeerDirectory(
-            self.store,
-            self.http,
-            self.clock,
-            self.trust,
-            int(self.cfg["card"]["max_card_age"]),
-        )
+                    self.store,
+                    self.http,
+                    self.clock,
+                    self.trust,
+                    int(self.cfg["card"]["max_card_age"]),
+                    preconfigured_pins=self.cfg.get("trust", {}).get("pins"),
+                )
         self.hook = self._load_policy_hook()
         self.base_url = ""
-        self._card: Optional[Dict[str, Any]] = None
+        self._card: dict[str, Any] | None = None
         self._card_lock = threading.Lock()
-        self._capture_lock = threading.Lock()
-        self.public: Optional[HttpServer] = None
-        self.intake: Optional[HttpServer] = None
-        self.local: Optional[LocalServer] = None
+        self.public: HttpServer | None = None
+        self.intake: HttpServer | None = None
+        self.local: LocalServer | None = None
         self._extensions_init()
 
     # -- extensoes de tickets posteriores (sessoes, push, organizacao, politica) ------------
@@ -106,7 +107,7 @@ class Sidecar:
         return load_hook(self.cfg.get("policy"))
 
     # -- identidade -----------------------------------------------------------------------
-    def _load_identity(self) -> Tuple[Identity, bytes]:
+    def _load_identity(self) -> tuple[Identity, bytes]:
         raw = self.keystore.load(IDENTITY_KEY)
         if raw is None:
             ident = Identity.generate(int(self.clock()))
@@ -137,7 +138,7 @@ class Sidecar:
             self._card = None
 
     # -- ciclo de vida --------------------------------------------------------------------
-    def start(self) -> "Sidecar":
+    def start(self) -> Sidecar:
         pub = self.cfg["public"]
         host, tls = pub["host"], pub.get("tls")
         if not is_loopback_host(host) and not tls:
@@ -174,11 +175,11 @@ class Sidecar:
             try:
                 if srv:
                     srv.stop()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         self.store.close()
 
-    def ready_info(self) -> Dict[str, Any]:
+    def ready_info(self) -> dict[str, Any]:
         return {
             "agent_id": self.identity.agent_id,
             "public_url": self.base_url,
@@ -189,7 +190,7 @@ class Sidecar:
         }
 
     # -- Agent Card -----------------------------------------------------------------------
-    def card(self) -> Dict[str, Any]:
+    def card(self) -> dict[str, Any]:
         now = int(self.clock())
         with self._card_lock:
             c = self._card
@@ -213,22 +214,13 @@ class Sidecar:
     def _attestations(self) -> list:
         return self.orgs.own_attestations() if self.orgs is not None else []
 
-    # -- captura de trafego (auditoria) ---------------------------------------------------
-    def capture(self, direction: str, kind: str, data: Any, **extra: Any) -> None:
-        path = self.cfg.get("capture_path")
-        if not path:
-            return
-        rec = {
-            "t": int(self.clock()),
-            "dir": direction,
-            "kind": kind,
-            "data": data,
-            **extra,
-        }
-        with self._capture_lock, open(path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(rec) + "\n")
 
-    # -- servidor publico -----------------------------------------------------------------
+    def capture(self, direction: str, kind: str, data: Any, **extra: Any) -> None:
+        """No-op: traffic capture removed (was optional, not in spec)."""
+
+
+
+
     def handle_public(self, req: Request) -> Response:
         p = req.path
         if req.method == "GET" and p == WELL_KNOWN:
@@ -268,19 +260,19 @@ class Sidecar:
         return Response(200, _rpc_error(rid, err))
 
     # -- envelope de entrada --------------------------------------------------------------
-    def resolve_sender(self, h: Dict[str, Any]) -> Tuple[CardInfo, PeerTrust]:
+    def resolve_sender(self, h: dict[str, Any]) -> tuple[CardInfo, PeerTrust]:
         return self.resolve_peer_at(h["sender_card"], h["sender"], h["sender_seq"])
 
     def resolve_peer_at(
         self, url: str, agent_id: str, seq: int
-    ) -> Tuple[CardInfo, PeerTrust]:
+    ) -> tuple[CardInfo, PeerTrust]:
         """Card do par; busca de novo se ele usa uma chave mais nova que a do Card em cache."""
         info, trust = self.peers.get(url, expected_id=agent_id)
         if seq > info.kel.seq:
             info, trust = self.peers.get(url, expected_id=agent_id, refresh=True)
         return info, trust
 
-    def escrow_org_for(self, peer_trust: PeerTrust) -> Optional[str]:
+    def escrow_org_for(self, peer_trust: PeerTrust) -> str | None:
         """Organizacao cujo escrow se aplica a conversa com este par (secao 11), ou None."""
         if self.orgs is None:
             return None
@@ -291,35 +283,40 @@ class Sidecar:
         return self.orgs.escrow_target(org) if org else None
 
     def open_incoming(
-        self, env: Any, expect_type: str, expected_sender: Optional[str] = None
-    ) -> Tuple[envelope.Opened, PeerTrust]:
-        trusts: Dict[str, PeerTrust] = {}
+            self, env: Any, expect_type: str, expected_sender: str | None = None
+        ) -> tuple[envelope.Opened, PeerTrust]:
+            trusts: dict[str, PeerTrust] = {}
 
-        def resolve(h: Dict[str, Any]) -> CardInfo:
-            if expected_sender is not None and h["sender"] != expected_sender:
-                raise SeloError("identity_mismatch", "resposta de outro agente")
-            info, trust = self.resolve_sender(h)
-            trusts["t"] = trust
-            return info
+            def resolve(h: dict[str, Any]) -> CardInfo:
+                if expected_sender is not None and h["sender"] != expected_sender:
+                    raise SeloError("identity_mismatch", "resposta de outro agente")
+                info, trust = self.resolve_sender(h)
+                trusts["t"] = trust
+                return info
 
-        opened = envelope.open_envelope(
-            env,
-            me=self.identity,
-            now=self.clock(),
-            resolve_sender=resolve,
-            replay=lambda s, m, exp: self.store.check_replay(s, m, exp, self.clock()),
-            escrow_org=lambda _info: self.escrow_org_for(trusts["t"]),
-            expect_type=expect_type,
-        )
-        return opened, trusts["t"]
+            def get_cached_key(h: dict[str, Any]) -> bytes | None:
+                return self.peers.get_cached_sender_key(
+                    h["sender"], h["sender_card"], h["sender_seq"]
+                )
+
+            opened = envelope.open_envelope(
+                env,
+                me=self.identity,
+                now=self.clock(),
+                resolve_sender=resolve,
+                replay=lambda s, m, exp: self.store.check_replay(s, m, exp, self.clock()),
+                escrow_org=lambda _info: self.escrow_org_for(trusts["t"]),
+                expect_type=expect_type,
+                get_cached_sender_key=get_cached_key,
+            )
+            return opened, trusts["t"]
 
     def handle_envelope(self, req: Request) -> Response:
         env = req.json()
-        self.capture("in", "envelope", env)
         opened, trust = self.open_incoming(env, "req")
         rpc = opened.body.get("rpc")
         try:
-            rid, method = _check_rpc_request(rpc)
+            _rid, method = _check_rpc_request(rpc)
             if channel.is_streaming(method):
                 raise SeloError("bad_request", "streaming exige sessao")
             result = self.dispatch_inbound(rpc, opened.sender, trust)
@@ -335,11 +332,10 @@ class Sidecar:
             re=opened.header["msg"],
             escrow=self.escrow_target(trust),
         )
-        self.capture("out", "envelope", resp)
         return Response(200, resp)
 
     # -- entrega ao agente local ----------------------------------------------------------
-    def _agent_headers(self, sender: CardInfo, trust: PeerTrust) -> Dict[str, str]:
+    def _agent_headers(self, sender: CardInfo, trust: PeerTrust) -> dict[str, str]:
         h = {
             "X-Selo-Sender": sender.agent_id,
             "X-Selo-Org": trust.org or "",
@@ -357,10 +353,10 @@ class Sidecar:
         return url
 
     def dispatch_inbound(
-        self, rpc: Dict[str, Any], sender: CardInfo, trust: PeerTrust
-    ) -> Dict[str, Any]:
+        self, rpc: dict[str, Any], sender: CardInfo, trust: PeerTrust
+    ) -> dict[str, Any]:
         """Politica, reescrita de push e entrega ao agente local (nao streaming)."""
-        rid, method = _check_rpc_request(rpc)
+        rid, _method = _check_rpc_request(rpc)
         rpc = self.before_inbound(rpc, sender, trust)
         try:
             status, body = self.http.json(
@@ -373,8 +369,8 @@ class Sidecar:
         return self.after_inbound(rpc, body, sender, trust)
 
     def stream_inbound(
-        self, rpc: Dict[str, Any], sender: CardInfo, trust: PeerTrust
-    ) -> Iterator[Dict[str, Any]]:
+        self, rpc: dict[str, Any], sender: CardInfo, trust: PeerTrust
+    ) -> Iterator[dict[str, Any]]:
         """Entrega uma requisicao de streaming ao agente e itera as respostas JSON-RPC."""
         rid, _method = _check_rpc_request(rpc)
         rpc = self.before_inbound(rpc, sender, trust)
@@ -396,18 +392,18 @@ class Sidecar:
             yield self.after_inbound(rpc, ev, sender, trust)
 
     def before_inbound(
-        self, rpc: Dict[str, Any], sender: CardInfo, trust: PeerTrust
-    ) -> Dict[str, Any]:
+        self, rpc: dict[str, Any], sender: CardInfo, trust: PeerTrust
+    ) -> dict[str, Any]:
         self.hook.check("inbound", "request", sender.agent_id, trust.org, rpc)
         return self.rewrite_push_inbound(rpc, sender)
 
     def after_inbound(
         self,
-        rpc: Dict[str, Any],
-        resp: Dict[str, Any],
+        rpc: dict[str, Any],
+        resp: dict[str, Any],
         sender: CardInfo,
         trust: PeerTrust,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         try:
             self.hook.check(
                 "inbound",
@@ -428,7 +424,7 @@ class Sidecar:
             raise SeloError("unknown_peer", ref)
         return url
 
-    def call(self, peer: str, rpc: Dict[str, Any]) -> Dict[str, Any]:
+    def call(self, peer: str, rpc: dict[str, Any]) -> dict[str, Any]:
         """LocalApi: envia uma requisicao nao streaming a um par e devolve a resposta JSON-RPC."""
         rid = rpc.get("id") if isinstance(rpc, dict) else None
         try:
@@ -442,7 +438,7 @@ class Sidecar:
         except SeloError as e:
             return _rpc_error(rid, e)
 
-    def stream(self, peer: str, rpc: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+    def stream(self, peer: str, rpc: dict[str, Any]) -> Iterator[dict[str, Any]]:
         rid = rpc.get("id") if isinstance(rpc, dict) else None
         try:
             _check_rpc_request(rpc)
@@ -454,18 +450,18 @@ class Sidecar:
             yield _rpc_error(rid, e)
 
     def before_outbound(
-        self, rpc: Dict[str, Any], info: CardInfo, trust: PeerTrust
-    ) -> Dict[str, Any]:
+        self, rpc: dict[str, Any], info: CardInfo, trust: PeerTrust
+    ) -> dict[str, Any]:
         self.hook.check("outbound", "request", info.agent_id, trust.org, rpc)
         return self.rewrite_push_outbound(rpc, info)
 
     def after_outbound(
         self,
-        rpc: Dict[str, Any],
-        resp: Dict[str, Any],
+        rpc: dict[str, Any],
+        resp: dict[str, Any],
         info: CardInfo,
         trust: PeerTrust,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         try:
             self.hook.check(
                 "outbound",
@@ -483,10 +479,10 @@ class Sidecar:
         self,
         info: CardInfo,
         trust: PeerTrust,
-        body: Dict[str, Any],
+        body: dict[str, Any],
         t: str = "req",
         path: str = "/selo/v1/envelope",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         env = envelope.seal(
             sender=self.identity,
             sender_card_url=self.base_url,
@@ -496,12 +492,10 @@ class Sidecar:
             now=self.clock(),
             escrow=self.escrow_target(trust),
         )
-        self.capture("out", "envelope", env)
         status, reply = self.http.json("POST", info.base_url + path, env)
         if status != 200 or not isinstance(reply, dict) or "error" in reply:
             code = reply.get("error") if isinstance(reply, dict) else None
             raise SeloError(code or "peer_error", f"HTTP {status}")
-        self.capture("in", "envelope", reply)
         opened, _trust = self.open_incoming(
             reply, "resp", expected_sender=info.agent_id
         )
@@ -510,8 +504,8 @@ class Sidecar:
         return opened.body
 
     def call_envelope(
-        self, info: CardInfo, trust: PeerTrust, rpc: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, info: CardInfo, trust: PeerTrust, rpc: dict[str, Any]
+    ) -> dict[str, Any]:
         try:
             body = self.send_envelope(info, trust, {"rpc": rpc})
         except SeloError as e:
@@ -528,13 +522,13 @@ class Sidecar:
         return resp
 
     # -- LocalApi -------------------------------------------------------------------------
-    def peer_card(self, peer: str, local_url: Optional[str]) -> Dict[str, Any]:
+    def peer_card(self, peer: str, local_url: str | None) -> dict[str, Any]:
         info, _trust = self.peers.get(self.resolve_ref(peer))
         return (
             local_view(info.card, local_url) if local_url else copy.deepcopy(info.card)
         )
 
-    def whoami(self) -> Dict[str, Any]:
+    def whoami(self) -> dict[str, Any]:
         return {
             "agent_id": self.identity.agent_id,
             "public_url": self.base_url,
@@ -543,15 +537,15 @@ class Sidecar:
 
     # -- push (ticket #16) ----------------------------------------------------------------
     def rewrite_push_outbound(
-        self, rpc: Dict[str, Any], info: CardInfo
-    ) -> Dict[str, Any]:
+        self, rpc: dict[str, Any], info: CardInfo
+    ) -> dict[str, Any]:
         from .push import rewrite_outbound
 
         return rewrite_outbound(self, rpc, info)
 
     def rewrite_push_inbound(
-        self, rpc: Dict[str, Any], sender: CardInfo
-    ) -> Dict[str, Any]:
+        self, rpc: dict[str, Any], sender: CardInfo
+    ) -> dict[str, Any]:
         from .push import rewrite_inbound
 
         return rewrite_inbound(self, rpc, sender)
@@ -567,7 +561,7 @@ class Sidecar:
         return handle_intake(self, req)
 
 
-def run_forever(cfg: Dict[str, Any]) -> None:
+def run_forever(cfg: dict[str, Any]) -> None:
     sc = Sidecar(cfg).start()
     print("READY " + json.dumps(sc.ready_info()), flush=True)
     stop = threading.Event()

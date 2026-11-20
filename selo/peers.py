@@ -6,8 +6,9 @@ Especificacao, secoes 5.2, 6.2 e 7. Toda decisao de aceitar um par passa por `Pe
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any
 
 from .card import WELL_KNOWN, CardInfo, normalize_base, verify_card
 from .errors import SeloError
@@ -22,13 +23,13 @@ REFRESH = 30  # segundos entre buscas do mesmo Card
 class PeerTrust:
     """Resultado da politica de confianca para um par aceito."""
 
-    org: Optional[str]  # organizacao confiavel que atesta o par, ou None
+    org: str | None  # organizacao confiavel que atesta o par, ou None
 
 
 class TrustPolicy:
     """Politica da secao 6.2. A parte de organizacoes e fornecida por `orgs` (selo.org)."""
 
-    def __init__(self, cfg: Dict[str, Any], orgs: Any = None) -> None:
+    def __init__(self, cfg: dict[str, Any], orgs: Any = None) -> None:
         trust = cfg.get("trust") or {}
         self.orgs = orgs  # selo.org.OrgTrust ou None
         member = orgs is not None and orgs.own_org is not None
@@ -61,14 +62,22 @@ class PeerDirectory:
         clock: Callable[[], float],
         policy: TrustPolicy,
         max_card_age: int,
+        preconfigured_pins: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self.store, self.http, self.clock, self.policy = store, http, clock, policy
         self.max_card_age = max_card_age
-        self._cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
+        self._cache: dict[str, tuple[dict[str, Any], float]] = {}
         self._lock = threading.Lock()
+        # Carrega pins pre-configurados (trust.pins) no store
+        if preconfigured_pins:
+            for agent_id, pin_data in preconfigured_pins.items():
+                seq = int(pin_data.get("seq", 0))
+                hash_val = pin_data.get("hash", "")
+                if seq > 0 and hash_val:
+                    self.store.set_pin(agent_id, seq, hash_val)
 
     def _verify(
-        self, card: Dict[str, Any], url: str, expected_id: Optional[str]
+        self, card: dict[str, Any], url: str, expected_id: str | None
     ) -> CardInfo:
         now = self.clock()
         info = verify_card(
@@ -78,8 +87,8 @@ class PeerDirectory:
         return info
 
     def get(
-        self, url: str, expected_id: Optional[str] = None, refresh: bool = False
-    ) -> Tuple[CardInfo, PeerTrust]:
+        self, url: str, expected_id: str | None = None, refresh: bool = False
+    ) -> tuple[CardInfo, PeerTrust]:
         base = normalize_base(url)
         now = self.clock()
         with self._lock:
@@ -109,3 +118,29 @@ class PeerDirectory:
     def forget(self, url: str) -> None:
         with self._lock:
             self._cache.pop(normalize_base(url), None)
+
+    def get_cached_sender_key(
+        self, sender_id: str, sender_card_url: str, sender_seq: int
+    ) -> bytes | None:
+        """
+        Retorna a chave de assinatura do remetente a partir do cache, sem busca de rede.
+        Usado para verificar a assinatura do envelope ANTES de buscar o Card fresco.
+        """
+        base = normalize_base(sender_card_url)
+        with self._lock:
+            cached = self._cache.get(base)
+        if cached is None:
+            return None
+        card, _ = cached
+        try:
+            info = verify_card(
+                card,
+                now=self.clock(),
+                max_card_age=self.max_card_age,
+                expected_id=sender_id,
+            )
+            if info.kel.seq != sender_seq:
+                return None
+            return info.kel.current.sig_pub
+        except SeloError:
+            return None

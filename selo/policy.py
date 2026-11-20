@@ -17,13 +17,17 @@ from __future__ import annotations
 
 import copy
 import importlib
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Literal
 
 from .errors import SeloError
 
-DIRECTIONS = ("inbound", "outbound")
-STAGES = ("request", "response")
+Direction = Literal["inbound", "outbound"]
+Stage = Literal["request", "response"]
+
+DIRECTIONS: tuple[Direction, ...] = ("inbound", "outbound")
+STAGES: tuple[Stage, ...] = ("request", "response")
 
 
 class PolicyDenied(Exception):
@@ -34,25 +38,23 @@ class PolicyDenied(Exception):
 
 @dataclass(frozen=True)
 class PolicyEvent:
-    direction: (
-        str  # inbound: o par chamou este agente; outbound: este agente chama o par
-    )
-    stage: str  # request | response
+    direction: Direction  # inbound: o par chamou este agente; outbound: este agente chama o par
+    stage: Stage  # request | response
     peer_id: str
-    peer_org: Optional[str]
-    method: Optional[str]
+    peer_org: str | None
+    method: str | None
     rpc: Any  # copia profunda da requisicao ou resposta JSON-RPC
 
 
 class NullHook:
     def check(
         self,
-        direction: str,
-        stage: str,
+        direction: Direction,
+        stage: Stage,
         peer_id: str,
-        peer_org: Optional[str],
+        peer_org: str | None,
         rpc: Any,
-        method: Optional[str] = None,
+        method: str | None = None,
     ) -> None:
         return None
 
@@ -63,12 +65,12 @@ class Hook(NullHook):
 
     def check(
         self,
-        direction: str,
-        stage: str,
+        direction: Direction,
+        stage: Stage,
         peer_id: str,
-        peer_org: Optional[str],
+        peer_org: str | None,
         rpc: Any,
-        method: Optional[str] = None,
+        method: str | None = None,
     ) -> None:
         if method is None and isinstance(rpc, dict):
             method = rpc.get("method")
@@ -79,13 +81,13 @@ class Hook(NullHook):
             self.fn(ev)
         except PolicyDenied as e:
             raise SeloError("policy_denied", e.reason) from None
-        except Exception as e:  # falha fechada
+        except Exception as e:  # noqa: BLE001 - falha fechada
             raise SeloError(
                 "policy_denied", f"erro no gancho: {type(e).__name__}"
             ) from None
 
 
-def load_hook(spec: Optional[str]) -> NullHook:
+def load_hook(spec: str | None) -> NullHook:
     if not spec:
         return NullHook()
     module, sep, attr = spec.partition(":")

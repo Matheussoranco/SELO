@@ -34,9 +34,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from selo.local import LocalClient  # noqa: E402
-from tests.harness import Proc  # noqa: E402
-from tests.tlsutil import make_ca, make_server_cert  # noqa: E402
+from selo.local import LocalClient
+from tests.harness import Proc
+from tests.tlsutil import make_ca, make_server_cert
 
 NS = {"a": "selo-host-a", "b": "selo-host-b", "r": "selo-router"}
 IP = {"a": "10.10.1.2", "b": "10.10.2.2"}

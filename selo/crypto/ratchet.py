@@ -15,7 +15,7 @@ depende da chave da mensagem. A decifragem e transacional: se falhar, o estado n
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric import x25519
 
@@ -44,16 +44,16 @@ def root_from_handshake(ck: bytes, h: bytes) -> bytes:
     return hkdf(ck, salt=h, info=ROOT_INFO, length=32)
 
 
-def kdf_rk(rk: bytes, dh: bytes) -> Tuple[bytes, bytes]:
+def kdf_rk(rk: bytes, dh: bytes) -> tuple[bytes, bytes]:
     out = hkdf(dh, salt=rk, info=b"selo/1/rk", length=64)
     return out[:32], out[32:]
 
 
-def kdf_ck(ck: bytes) -> Tuple[bytes, bytes]:
+def kdf_ck(ck: bytes) -> tuple[bytes, bytes]:
     return hmac_sha256(ck, b"\x02"), hmac_sha256(ck, b"\x01")
 
 
-def message_key_material(mk: bytes) -> Tuple[bytes, bytes]:
+def message_key_material(mk: bytes) -> tuple[bytes, bytes]:
     out = hkdf(mk, salt=b"\x00" * 32, info=b"selo/1/mk", length=44)
     return out[:32], out[32:]
 
@@ -69,29 +69,30 @@ def open_with(mk: bytes, ad: bytes, ct: bytes) -> bytes:
 
 
 class Ratchet:
-    def __init__(self) -> None:
-        self.dhs: Optional[x25519.X25519PrivateKey] = None
-        self.dhr: Optional[bytes] = None
+    def __init__(self, max_stored: int = 1024) -> None:
+        self.dhs: x25519.X25519PrivateKey | None = None
+        self.dhr: bytes | None = None
         self.rk = b""
-        self.cks: Optional[bytes] = None
-        self.ckr: Optional[bytes] = None
+        self.cks: bytes | None = None
+        self.ckr: bytes | None = None
         self.ns = self.nr = self.pn = 0
-        self.skipped: Dict[Tuple[bytes, int], bytes] = {}
+        self.skipped: dict[tuple[bytes, int], bytes] = {}
+        self.max_stored = max_stored
 
     # -- inicializacao --------------------------------------------------------------------
     @classmethod
     def init_alice(
-        cls, sk: bytes, bob_pub: bytes, dhs: Optional[x25519.X25519PrivateKey] = None
-    ) -> "Ratchet":
-        r = cls()
+        cls, sk: bytes, bob_pub: bytes, dhs: x25519.X25519PrivateKey | None = None, max_stored: int = 1024
+    ) -> Ratchet:
+        r = cls(max_stored=max_stored)
         r.dhs = dhs or x25519_generate()
         r.dhr = bob_pub
         r.rk, r.cks = kdf_rk(sk, x25519_dh(r.dhs, bob_pub))
         return r
 
     @classmethod
-    def init_bob(cls, sk: bytes, bob_keypair: x25519.X25519PrivateKey) -> "Ratchet":
-        r = cls()
+    def init_bob(cls, sk: bytes, bob_keypair: x25519.X25519PrivateKey, max_stored: int = 1024) -> Ratchet:
+        r = cls(max_stored=max_stored)
         r.dhs = bob_keypair
         r.rk = sk
         return r
@@ -100,7 +101,7 @@ class Ratchet:
     def can_send(self) -> bool:
         return self.cks is not None
 
-    def next_send(self) -> Tuple[Dict[str, Any], bytes]:
+    def next_send(self) -> tuple[dict[str, Any], bytes]:
         if self.cks is None:
             raise SeloError(
                 "ratchet_not_ready", "o respondedor so envia depois de receber"
@@ -111,7 +112,7 @@ class Ratchet:
         return hdr, mk
 
     # -- recebimento ----------------------------------------------------------------------
-    def receive_key(self, hdr: Dict[str, Any]) -> bytes:
+    def receive_key(self, hdr: dict[str, Any]) -> bytes:
         """Avanca o estado e devolve a chave da mensagem com cabecalho `hdr`.
 
         Use `decrypt` (transacional) em vez deste metodo quando houver texto cifrado."""
@@ -127,7 +128,7 @@ class Ratchet:
         self.nr += 1
         return mk
 
-    def decrypt(self, hdr: Dict[str, Any], ad: bytes, ct: bytes) -> Tuple[bytes, bytes]:
+    def decrypt(self, hdr: dict[str, Any], ad: bytes, ct: bytes) -> tuple[bytes, bytes]:
         """Decifra; devolve (texto claro, chave da mensagem). Nada muda se falhar."""
         snapshot = self._snapshot()
         try:
@@ -136,7 +137,7 @@ class Ratchet:
         except SeloError:
             self._restore(snapshot)
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001
             self._restore(snapshot)
             raise SeloError("bad_ciphertext") from None
 
@@ -149,7 +150,7 @@ class Ratchet:
             self.ckr, mk = kdf_ck(self.ckr)
             self.skipped[(self.dhr, self.nr)] = mk
             self.nr += 1
-        while len(self.skipped) > MAX_STORED:
+        while len(self.skipped) > self.max_stored:
             self.skipped.pop(next(iter(self.skipped)))
 
     def _dh_ratchet(self, dh: bytes) -> None:
@@ -160,8 +161,8 @@ class Ratchet:
         self.rk, self.cks = kdf_rk(self.rk, x25519_dh(self.dhs, self.dhr))
 
     # -- persistencia ---------------------------------------------------------------------
-    def to_dict(self) -> Dict[str, Any]:
-        def opt(b: Optional[bytes]) -> Optional[str]:
+    def to_dict(self) -> dict[str, Any]:
+        def opt(b: bytes | None) -> str | None:
             return None if b is None else b64u(b)
 
         return {
@@ -173,15 +174,16 @@ class Ratchet:
             "ns": self.ns,
             "nr": self.nr,
             "pn": self.pn,
+            "max_stored": self.max_stored,
             "skipped": [[b64u(d), n, b64u(mk)] for (d, n), mk in self.skipped.items()],
         }
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Ratchet":
-        def opt(s: Optional[str]) -> Optional[bytes]:
+    def from_dict(cls, d: dict[str, Any]) -> Ratchet:
+        def opt(s: str | None) -> bytes | None:
             return None if s is None else unb64u(s)
 
-        r = cls()
+        r = cls(max_stored=d.get("max_stored", 1024))
         r.dhs = x25519_from_bytes(unb64u(d["dhs"]))
         r.dhr, r.rk, r.cks, r.ckr = (
             opt(d["dhr"]),
@@ -193,7 +195,7 @@ class Ratchet:
         r.skipped = {(unb64u(a), n): unb64u(c) for a, n, c in d["skipped"]}
         return r
 
-    def _snapshot(self) -> Dict[str, Any]:
+    def _snapshot(self) -> dict[str, Any]:
         return {
             "dhs": self.dhs,
             "dhr": self.dhr,
@@ -206,12 +208,12 @@ class Ratchet:
             "skipped": copy.copy(self.skipped),
         }
 
-    def _restore(self, s: Dict[str, Any]) -> None:
+    def _restore(self, s: dict[str, Any]) -> None:
         for k, v in s.items():
             setattr(self, k, v)
 
 
-def _parse_hdr(hdr: Any) -> Tuple[bytes, int, int]:
+def _parse_hdr(hdr: Any) -> tuple[bytes, int, int]:
     if not isinstance(hdr, dict) or set(hdr) != {"dh", "pn", "n"}:
         raise SeloError("bad_header")
     pn, n = hdr["pn"], hdr["n"]

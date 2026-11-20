@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from . import EXTENSION_URI, PROTOCOL, jcs
 from .crypto.primitives import b64u, ed25519_verify, unb64u
@@ -32,7 +32,7 @@ def normalize_base(url: str) -> str:
     return url.rstrip("/")
 
 
-def _signing_input(protected: str, card: Dict[str, Any]) -> bytes:
+def _signing_input(protected: str, card: dict[str, Any]) -> bytes:
     body = {k: v for k, v in card.items() if k != "signatures"}
     return (protected + "." + b64u(jcs.canonicalize(body))).encode("ascii")
 
@@ -43,12 +43,12 @@ def build_card(
     *,
     name: str,
     description: str = "",
-    skills: Optional[List[Dict[str, Any]]] = None,
-    attestations: Optional[List[Dict[str, Any]]] = None,
+    skills: list[dict[str, Any]] | None = None,
+    attestations: list[dict[str, Any]] | None = None,
     iat: int,
     validity: int = DEFAULT_VALIDITY,
     version: str = "1.0.0",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if not 0 < validity <= MAX_LIFETIME:
         raise SeloError("bad_validity")
     base = normalize_base(base_url)
@@ -62,7 +62,7 @@ def build_card(
         "attestations": list(attestations or []),
         "endpoints": dict(ENDPOINTS),
     }
-    card: Dict[str, Any] = {
+    card: dict[str, Any] = {
         "name": name,
         "description": description or f"Agente SELO {name}",
         "version": version,
@@ -108,12 +108,12 @@ def build_card(
 class CardInfo:
     agent_id: str
     kel: KelState
-    kel_raw: List[Dict[str, Any]]
+    kel_raw: list[dict[str, Any]]
     base_url: str
     iat: int
     exp: int
-    attestations: List[Dict[str, Any]]
-    card: Dict[str, Any] = field(repr=False)
+    attestations: list[dict[str, Any]]
+    card: dict[str, Any] = field(repr=False)
 
     @property
     def agree_pub(self) -> bytes:
@@ -123,7 +123,7 @@ class CardInfo:
         return (len(self.kel_raw) - 1, self.kel.head)
 
 
-def selo_params(card: Any) -> Dict[str, Any]:
+def selo_params(card: Any) -> dict[str, Any]:
     try:
         exts = card["capabilities"]["extensions"]
     except (TypeError, KeyError):
@@ -141,7 +141,7 @@ def verify_card(
     *,
     now: float,
     max_card_age: int = DEFAULT_MAX_CARD_AGE,
-    expected_id: Optional[str] = None,
+    expected_id: str | None = None,
 ) -> CardInfo:
     if not isinstance(card, dict):
         raise SeloError("bad_card")
@@ -200,7 +200,7 @@ def jcs_load(raw: bytes) -> Any:
     return json.loads(raw.decode("utf-8"))
 
 
-def local_view(card: Dict[str, Any], local_url: str) -> Dict[str, Any]:
+def local_view(card: dict[str, Any], local_url: str) -> dict[str, Any]:
     """Copia do Card de um par, verificada pelo sidecar, com a URL trocada pelo proxy local.
 
     A assinatura original deixa de valer depois da troca, entao e removida; o sidecar marca

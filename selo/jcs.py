@@ -4,12 +4,13 @@
 str, int, float, bool, None). Regras da RFC:
 
 * objetos com chaves ordenadas pelas unidades UTF-16 do nome;
-* strings com o escape minimo de JSON (so `"`, `\\` e controles < 0x20), o resto literal;
+* strings com o escape minimo de JSON (so `"`, `\` e controles < 0x20), o resto literal;
 * numeros serializados como o `Number.prototype.toString` do ECMAScript sobre um double IEEE 754.
 """
 
 from __future__ import annotations
 
+import functools
 import math
 from typing import Any
 
@@ -26,53 +27,72 @@ _ESC = {
     0x0C: "\\f",
     0x0D: "\\r",
 }
-
-
 def canonicalize(value: Any) -> bytes:
     out: list = []
     _write(value, out)
     return "".join(out).encode("utf-8")
 
 
+# Dispatch table for type handlers (replaces long if/elif chain)
+@functools.singledispatch
 def _write(v: Any, out: list) -> None:
-    if v is None:
-        out.append("null")
-    elif v is True:
-        out.append("true")
-    elif v is False:
-        out.append("false")
-    elif isinstance(v, str):
-        out.append(_string(v))
-    elif isinstance(v, int):
-        if abs(v) > MAX_SAFE_INT:
-            raise SeloError("bad_json", "inteiro fora de +-(2^53-1)")
-        out.append(str(v))
-    elif isinstance(v, float):
-        out.append(number(v))
-    elif isinstance(v, dict):
-        items = []
-        for k in v:
-            if not isinstance(k, str):
-                raise SeloError("bad_json", "chave de objeto nao e string")
-            items.append(k)
-        items.sort(key=lambda k: k.encode("utf-16-be", "surrogatepass"))
-        out.append("{")
-        for i, k in enumerate(items):
-            if i:
-                out.append(",")
-            out.append(_string(k))
-            out.append(":")
-            _write(v[k], out)
-        out.append("}")
-    elif isinstance(v, (list, tuple)):
-        out.append("[")
-        for i, item in enumerate(v):
-            if i:
-                out.append(",")
-            _write(item, out)
-        out.append("]")
-    else:
-        raise SeloError("bad_json", f"tipo nao serializavel: {type(v).__name__}")
+    raise SeloError("bad_json", f"tipo nao serializavel: {type(v).__name__}")
+
+
+@_write.register(type(None))
+def _(v: None, out: list) -> None:
+    out.append("null")
+
+
+@_write.register(bool)
+def _(v: bool, out: list) -> None:
+    out.append("true" if v else "false")
+
+
+@_write.register(str)
+def _(v: str, out: list) -> None:
+    out.append(_string(v))
+
+
+@_write.register(int)
+def _(v: int, out: list) -> None:
+    if abs(v) > MAX_SAFE_INT:
+        raise SeloError("bad_json", "inteiro fora de +-(2^53-1)")
+    out.append(str(v))
+
+
+@_write.register(float)
+def _(v: float, out: list) -> None:
+    out.append(number(v))
+
+
+@_write.register(dict)
+def _(v: dict, out: list) -> None:
+    items = []
+    for k in v:
+        if not isinstance(k, str):
+            raise SeloError("bad_json", "chave de objeto nao e string")
+        items.append(k)
+    items.sort(key=lambda k: k.encode("utf-16-be", "surrogatepass"))
+    out.append("{")
+    for i, k in enumerate(items):
+        if i:
+            out.append(",")
+        out.append(_string(k))
+        out.append(":")
+        _write(v[k], out)
+    out.append("}")
+
+
+@_write.register(list)
+@_write.register(tuple)
+def _(v: list | tuple, out: list) -> None:
+    out.append("[")
+    for i, item in enumerate(v):
+        if i:
+            out.append(",")
+        _write(item, out)
+    out.append("]")
 
 
 def _string(s: str) -> str:
@@ -84,7 +104,7 @@ def _string(s: str) -> str:
         if c in _ESC:
             parts.append(_ESC[c])
         elif c < 0x20:
-            parts.append(f"\\u{c:04x}")
+            parts.append("\\u{:04x}".format(c))
         else:
             parts.append(ch)
     parts.append('"')

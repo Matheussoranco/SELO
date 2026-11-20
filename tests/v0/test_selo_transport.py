@@ -12,12 +12,12 @@ from selo_v0 import RemoteError, Session
 from selo_v0.sandbox import World
 from selo_v0.transport import (
     OrgClient,
+    _make_handler,
+    _Server,
     fetch_catalog,
     http_send,
     serve_agent,
     serve_org,
-    _make_handler,
-    _Server,
 )
 
 MAL = "https://noticias.example/maliciosa"

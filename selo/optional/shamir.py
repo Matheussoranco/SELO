@@ -10,12 +10,12 @@ Reaproveitado do prototipo selo_v0.
 from __future__ import annotations
 
 import secrets
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
-from .errors import SeloError
+from selo.errors import SeloError
 
 P = 2**256 - 189
-Share = Tuple[int, bytes]
+Share = tuple[int, bytes]
 
 
 def random_secret() -> bytes:
@@ -26,7 +26,7 @@ def random_secret() -> bytes:
             return value.to_bytes(32, "big")
 
 
-def split(secret: bytes, threshold: int, shares: int) -> List[Share]:
+def split(secret: bytes, threshold: int, shares: int) -> list[Share]:
     if len(secret) != 32 or int.from_bytes(secret, "big") >= P:
         raise SeloError("bad_secret")
     if not 1 <= threshold <= shares <= 255:
@@ -34,7 +34,7 @@ def split(secret: bytes, threshold: int, shares: int) -> List[Share]:
     coeffs = [int.from_bytes(secret, "big")] + [
         secrets.randbelow(P) for _ in range(threshold - 1)
     ]
-    out: List[Share] = []
+    out: list[Share] = []
     for x in range(1, shares + 1):
         y = 0
         for c in reversed(coeffs):  # Horner

@@ -19,8 +19,9 @@ import stat
 import sys
 import threading
 import urllib.parse
+from collections.abc import Callable, Iterator
 from multiprocessing.connection import Client, Listener
-from typing import Any, Callable, Dict, Iterator, Optional
+from typing import Any
 
 from .card import WELL_KNOWN
 from .errors import SeloError
@@ -32,10 +33,10 @@ MAX_FRAME = 1024 * 1024
 class LocalApi:
     """O que o sidecar oferece ao agente. Implementado por `selo.sidecar.Sidecar`."""
 
-    def call(self, peer: str, rpc: Dict[str, Any]) -> Dict[str, Any]: ...
-    def stream(self, peer: str, rpc: Dict[str, Any]) -> Iterator[Dict[str, Any]]: ...
-    def peer_card(self, peer: str, local_url: Optional[str]) -> Dict[str, Any]: ...
-    def whoami(self) -> Dict[str, Any]: ...
+    def call(self, peer: str, rpc: dict[str, Any]) -> dict[str, Any]: ...
+    def stream(self, peer: str, rpc: dict[str, Any]) -> Iterator[dict[str, Any]]: ...
+    def peer_card(self, peer: str, local_url: str | None) -> dict[str, Any]: ...
+    def whoami(self) -> dict[str, Any]: ...
 
 
 def _private_file(path: str, data: bytes) -> None:
@@ -51,7 +52,7 @@ def default_mode() -> str:
     return "pipe" if sys.platform == "win32" else "unix"
 
 
-def _frames_error(e: SeloError) -> Dict[str, Any]:
+def _frames_error(e: SeloError) -> dict[str, Any]:
     return {"error": e.jsonrpc_error()}
 
 
@@ -68,13 +69,13 @@ class LocalServer:
         self.mode = default_mode() if mode == "auto" else mode
         self.port = port
         self.run_dir = os.path.join(state_dir, "run")
-        self.info: Dict[str, Any] = {}
-        self._listener: Optional[Listener] = None
-        self._http: Optional[HttpServer] = None
+        self.info: dict[str, Any] = {}
+        self._listener: Listener | None = None
+        self._http: HttpServer | None = None
         self._stopped = threading.Event()
 
     # -- ciclo de vida --------------------------------------------------------------------
-    def start(self) -> "LocalServer":
+    def start(self) -> LocalServer:
         os.makedirs(self.run_dir, exist_ok=True)
         if self.mode in ("pipe", "unix"):
             key = secrets.token_bytes(32)
@@ -123,7 +124,7 @@ class LocalServer:
         if self._listener is not None:
             try:
                 self._listener.close()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
     # -- pipe / unix ----------------------------------------------------------------------
@@ -132,7 +133,7 @@ class LocalServer:
         while not self._stopped.is_set():
             try:
                 conn = self._listener.accept()  # faz o desafio HMAC
-            except Exception:
+            except Exception:  # noqa: BLE001
                 if self._stopped.is_set():
                     return
                 continue  # cliente sem a chave: ignorado
@@ -181,7 +182,7 @@ class LocalServer:
         finally:
             try:
                 conn.close()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
     # -- http -----------------------------------------------------------------------------
@@ -190,50 +191,48 @@ class LocalServer:
         return hmac.compare_digest(got.encode(), f"Bearer {self._token}".encode())
 
     def _handle_http(self, req: Request) -> Response:
-        if not self._authorized(req):
-            return Response(401, {"error": "unauthorized"})
-        parts = req.path.split("/")
-        if req.method == "GET" and req.path == "/whoami":
-            return Response(200, self.api.whoami())
-        if len(parts) >= 3 and parts[1] == "peers":
-            peer = urllib.parse.unquote(parts[2])
-            rest = "/" + "/".join(parts[3:])
-            local_url = f"{self.info['url']}/peers/{parts[2]}"
-            if req.method == "GET" and rest == WELL_KNOWN:
-                try:
-                    return Response(200, self.api.peer_card(peer, local_url))
-                except SeloError as e:
-                    return Response(502, {"error": e.code})
-            if req.method == "POST" and rest in ("/", ""):
-                try:
-                    rpc = req.json()
-                except SeloError:
-                    return Response(
-                        200,
-                        {
-                            "jsonrpc": "2.0",
-                            "id": None,
-                            "error": {"code": -32700, "message": "parse error"},
-                        },
-                    )
-                from .channel import is_streaming
+            if not self._authorized(req):
+                return Response(401, {"error": "unauthorized"})
+            parts = req.path.split("/")
+            if len(parts) >= 3 and parts[1] == "peers":
+                peer = urllib.parse.unquote(parts[2])
+                rest = "/" + "/".join(parts[3:])
+                local_url = f"{self.info['url']}/peers/{parts[2]}"
+                if req.method == "GET" and rest == WELL_KNOWN:
+                    try:
+                        return Response(200, self.api.peer_card(peer, local_url))
+                    except SeloError as e:
+                        return Response(502, {"error": e.code})
+                if req.method == "POST" and rest in ("/", ""):
+                    try:
+                        rpc = req.json()
+                    except SeloError:
+                        return Response(
+                            200,
+                            {
+                                "jsonrpc": "2.0",
+                                "id": None,
+                                "error": {"code": -32700, "message": "parse error"},
+                            },
+                        )
+                    from .channel import is_streaming
 
-                if isinstance(rpc, dict) and is_streaming(str(rpc.get("method"))):
-                    events = self.api.stream(peer, rpc)
-                    return Response(
-                        200,
-                        content_type="text/event-stream",
-                        stream=(sse_event(json.dumps(ev)) for ev in events),
-                    )
-                return Response(200, self.api.call(peer, rpc))
-        return Response(404, {"error": "not_found"})
+                    if isinstance(rpc, dict) and is_streaming(str(rpc.get("method"))):
+                        events = self.api.stream(peer, rpc)
+                        return Response(
+                            200,
+                            content_type="text/event-stream",
+                            stream=(sse_event(json.dumps(ev)) for ev in events),
+                        )
+                    return Response(200, self.api.call(peer, rpc))
+            return Response(404, {"error": "not_found"})
 
 
 class LocalClient:
     """Cliente do canal local, usado pelo agente (ou por testes)."""
 
     def __init__(
-        self, state_dir: Optional[str] = None, info: Optional[Dict[str, Any]] = None
+        self, state_dir: str | None = None, info: dict[str, Any] | None = None
     ) -> None:
         if info is None:
             with open(
@@ -254,7 +253,7 @@ class LocalClient:
         family = "AF_PIPE" if self.mode == "pipe" else "AF_UNIX"
         return Client(self.info["address"], family=family, authkey=self._key)
 
-    def _roundtrip(self, frame: Dict[str, Any]) -> Dict[str, Any]:
+    def _roundtrip(self, frame: dict[str, Any]) -> dict[str, Any]:
         conn = self._conn()
         try:
             conn.send_bytes(json.dumps(frame).encode())
@@ -263,13 +262,13 @@ class LocalClient:
             conn.close()
 
     @staticmethod
-    def _check(reply: Dict[str, Any]) -> Dict[str, Any]:
+    def _check(reply: dict[str, Any]) -> dict[str, Any]:
         if "error" in reply:
             err = reply["error"]
             raise SeloError(err.get("message", "error"), str(err.get("data", "")))
         return reply
 
-    def call(self, peer: str, rpc: Dict[str, Any]) -> Dict[str, Any]:
+    def call(self, peer: str, rpc: dict[str, Any]) -> dict[str, Any]:
         if self.mode == "http":
             status, body = self._http.json(
                 "POST",
@@ -284,7 +283,7 @@ class LocalClient:
             "rpc"
         ]
 
-    def stream(self, peer: str, rpc: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+    def stream(self, peer: str, rpc: dict[str, Any]) -> Iterator[dict[str, Any]]:
         if self.mode == "http":
             r = self._http.stream(
                 "POST",
@@ -312,7 +311,7 @@ class LocalClient:
         finally:
             conn.close()
 
-    def card(self, peer: str) -> Dict[str, Any]:
+    def card(self, peer: str) -> dict[str, Any]:
         if self.mode == "http":
             status, body = self._http.json(
                 "GET",
@@ -325,15 +324,10 @@ class LocalClient:
             return body
         return self._check(self._roundtrip({"op": "card", "peer": peer}))["card"]
 
-    def whoami(self) -> Dict[str, Any]:
-        if self.mode == "http":
-            return self._http.json(
-                "GET",
-                f"{self.info['url']}/whoami",
-                None,
-                {"Authorization": f"Bearer {self._token}"},
-            )[1]
-        return self._check(self._roundtrip({"op": "whoami"}))["whoami"]
+    def whoami(self) -> dict[str, Any]:
+            if self.mode == "http":
+                raise SeloError("not_supported", "whoami nao disponivel no modo HTTP; use pipe/unix")
+            return self._check(self._roundtrip({"op": "whoami"}))["whoami"]
 
 
 Callback = Callable[..., Any]

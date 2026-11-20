@@ -11,7 +11,7 @@ import json
 import shutil
 import tempfile
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selo.keystore import MemoryKeyStore
 from selo.refagent import RefAgent
@@ -19,7 +19,7 @@ from selo.sidecar import Sidecar
 from tests.harness import FakeClock
 
 
-def send_message(text: str, rid: Any = 1, **params: Any) -> Dict[str, Any]:
+def send_message(text: str, rid: Any = 1, **params: Any) -> dict[str, Any]:
     return {
         "jsonrpc": "2.0",
         "id": rid,
@@ -35,7 +35,7 @@ def send_message(text: str, rid: Any = 1, **params: Any) -> Dict[str, Any]:
     }
 
 
-def deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+def deep_merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     out = json.loads(json.dumps(a))
     for k, v in b.items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
@@ -48,10 +48,10 @@ def deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
 class InNode:
     def __init__(
         self,
-        world: "InWorld",
+        world: InWorld,
         name: str,
-        clock: Optional[FakeClock] = None,
-        cfg: Optional[Dict[str, Any]] = None,
+        clock: FakeClock | None = None,
+        cfg: dict[str, Any] | None = None,
     ) -> None:
         self.name = name
         self.clock = clock or world.clock
@@ -75,10 +75,10 @@ class InNode:
     def agent_id(self) -> str:
         return self.sc.identity.agent_id
 
-    def send(self, peer: "InNode", text: str) -> Dict[str, Any]:
+    def send(self, peer: InNode, text: str) -> dict[str, Any]:
         return self.sc.call(peer.url, send_message(text))
 
-    def restart(self, cfg: Optional[Dict[str, Any]] = None) -> None:
+    def restart(self, cfg: dict[str, Any] | None = None) -> None:
         """Reinicia o sidecar com o mesmo cofre e o mesmo diretorio de estado.
 
         `cfg` (opcional) e mesclado a configuracao atual; chaves com valor None sao apagadas.
@@ -92,7 +92,7 @@ class InNode:
         self.sc = Sidecar(self.cfg, keystore=self.keystore, clock=self.clock).start()
 
     def join(
-        self, org: Any, trust_orgs: Optional[list] = None, descriptor: Any = None
+        self, org: Any, trust_orgs: list | None = None, descriptor: Any = None
     ) -> None:
         """Atesta este agente pela organizacao `org` e reinicia o sidecar como membro."""
         att = org.attest(self.agent_id, self.clock())
@@ -112,7 +112,7 @@ class InNode:
 
 
 class InWorld:
-    def __init__(self, start: Optional[float] = None) -> None:
+    def __init__(self, start: float | None = None) -> None:
         import time
 
         self.tmp = tempfile.mkdtemp(prefix="selo-inproc-")
@@ -124,10 +124,10 @@ class InWorld:
         self.nodes.append(n)
         return n
 
-    def __enter__(self) -> "InWorld":
+    def __enter__(self) -> InWorld:
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         for n in self.nodes:
             try:
                 n.stop()
@@ -136,6 +136,6 @@ class InWorld:
         shutil.rmtree(self.tmp, ignore_errors=True)
 
 
-def error_code(resp: Dict[str, Any]) -> Optional[str]:
+def error_code(resp: dict[str, Any]) -> str | None:
     err = resp.get("error")
     return err.get("message") if isinstance(err, dict) else None
